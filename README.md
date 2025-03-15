@@ -86,7 +86,7 @@ Crie dois formulários para facilitar o preenchimento da tabela t_bdcdata:
 		ENDFORM.
 
 
- Exemplo Completo de um BDC
+ Exemplo Completo de um BDC:
 
 	REPORT z_bdc.
 	
