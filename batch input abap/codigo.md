@@ -7,7 +7,7 @@ Identifique a transação que você deseja automatizar (por exemplo, VA01 para c
 
 Execute a transação manualmente no SAP e anote:
 
-As telas (dynpros) que aparecem.
+As telas (dynpros) que aparecem. 
 
 Os campos que precisam ser preenchidos.
 
