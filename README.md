@@ -39,9 +39,7 @@ Declarar as tabelas e variáveis necessárias para o BDC:
 		      s_bdcdata TYPE bdcdata,            " Estrutura para os dados do BDC
 		      t_messtab TYPE TABLE OF bdcmsgcoll, " Tabela para armazenar mensagens do BDC
 		      wa_opt    TYPE ctu_params.          " Estrutura para opções de execução do BDC
-
-
-  Preencher a tabela t_bdcdata com os dados das telas e campos, usando os formulários f_bdc_dynpro e f_bdc_field:
+Preencher a tabela t_bdcdata com os dados das telas e campos, usando os formulários f_bdc_dynpro e f_bdc_field:
 		PERFORM f_bdc_dynpro USING 'SAPMV45A' '0101'.
 		PERFORM f_bdc_field USING: 'BDC_CURSOR' 'VBAK-AUART',
 		                           'BDC_OKCODE' '=ENT2',
