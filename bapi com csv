@@ -15,3 +15,52 @@ O arquivo CSV deve ter os seguintes campos:
   canal_distribuicao: Canal de distribuição.
   setor_atividade: Setor de atividade.
   
+Validação de Dados:
+O programa valida se o cliente e o material existem no SAP antes de criar o pedido.
+Caso algum dado seja inválido, o pedido é ignorado e uma mensagem de erro é registrada no relatório.
+
+Criação de Pedidos de Venda:
+  Utiliza a BAPI BAPI_SALESORDER_CREATEFROMDAT2 para criar os pedidos.
+Preenche automaticamente os dados do cabeçalho, itens, parceiros e agendamento.
+
+Relatório ALV:
+
+Após o processamento, o programa exibe um relatório ALV com o status de cada pedido:
+
+Sucesso (S): Pedido criado com sucesso. O número do pedido é exibido.
+
+Erro (E): Pedido não criado. A mensagem de erro é exibida.
+
+Estrutura do Código:
+Tipos e Variáveis:
+
+ty_pedidos_vendas: Estrutura para armazenar os dados lidos do CSV.
+
+ty_relatorio: Estrutura para armazenar o resultado do processamento (status, mensagem, número do pedido).
+
+Tabelas e estruturas para a BAPI (bapisdhd1, bapisditm, bapiparnr, etc.).
+
+Tela de Seleção:
+
+Permite ao usuário selecionar o arquivo CSV a ser processado.
+
+Processamento Principal:
+
+Leitura do Arquivo CSV: O arquivo é lido e convertido para uma tabela interna.
+
+Loop de Processamento: Para cada linha do CSV:
+
+Valida o cliente e o material.
+
+Preenche os dados da BAPI (cabeçalho, itens, parceiros, agendamento).
+
+Chama a BAPI para criar o pedido.
+
+Verifica mensagens de retorno e registra o status no relatório.
+
+Relatório ALV: Exibe o resultado do processamento em uma tabela ALV.
+
+Formulários:
+
+f_load_file: Realiza o upload do arquivo CSV e converte os dados para a tabela interna.
+
