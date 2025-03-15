@@ -62,5 +62,37 @@ Relatório ALV: Exibe o resultado do processamento em uma tabela ALV.
 
 Formulários:
 
-f_load_file: Realiza o upload do arquivo CSV e converte os dados para a tabela interna.
+f_load_file: Realiza o upload do arquivo CSV e converte os dados para a tabela interna.  
 
+Exemplo de Arquivo CSV:
+  cliente;data_pedido;material;quantidade;valor_unitario;organizacao_vendas;canal_distribuicao;setor_atividade
+  1001;20231001;MAT001;10;100.50;1000;10;00
+  1002;20231001;MAT002;5;200.75;1000;10;00
+  1003;20231001;MAT003;20;50.00;1000;10;00
+
+
+O relatório ALV exibirá o status de cada pedido:
+
+Sucesso: Número do pedido criado.
+
+Erro: Mensagem de erro (ex: "Cliente não encontrado").
+
+
+Dependências:
+BAPI: BAPI_SALESORDER_CREATEFROMDAT2.
+
+Funções de Conversão: CONVERSION_EXIT_ALPHA_INPUT para formatar números com zeros à esquerda.
+
+ALV: cl_salv_table para exibir o relatório.
+
+
+Observações:
+Validações: Certifique-se de que os dados do CSV (clientes, materiais, etc.) existam no SAP.
+
+Erros Comuns: Verifique as mensagens de erro no relatório ALV para corrigir problemas.
+
+Customizações: Adapte o código conforme necessário para atender às regras de negócio específicas.
+
+
+caso precise de mais informações acesse:
+https://help.sap.com/docs/
