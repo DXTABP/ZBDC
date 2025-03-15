@@ -1,0 +1,4 @@
+Este programa ABAP foi desenvolvido para automatizar a criação de pedidos de venda (Sales Orders) no SAP a partir de um arquivo CSV. 
+Ele utiliza a BAPI BAPI_SALESORDER_CREATEFROMDAT2 para criar os pedidos e valida os dados antes de processá-los. 
+O programa também gera um relatório ALV com o status de cada pedido criado.
+
