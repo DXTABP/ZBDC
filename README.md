@@ -35,10 +35,10 @@ No programa ABAP, você precisará:
 
 Declarar as tabelas e variáveis necessárias para o BDC:
 
-	DATA: t_bdcdata TYPE TABLE OF bdcdata,   " Tabela para armazenar os dados do BDC
-	      s_bdcdata TYPE bdcdata,            " Estrutura para os dados do BDC
-	      t_messtab TYPE TABLE OF bdcmsgcoll, " Tabela para armazenar mensagens do BDC
-	      wa_opt    TYPE ctu_params.          " Estrutura para opções de execução do BDC
+		DATA: t_bdcdata TYPE TABLE OF bdcdata,   " Tabela para armazenar os dados do BDC
+		      s_bdcdata TYPE bdcdata,            " Estrutura para os dados do BDC
+		      t_messtab TYPE TABLE OF bdcmsgcoll, " Tabela para armazenar mensagens do BDC
+		      wa_opt    TYPE ctu_params.          " Estrutura para opções de execução do BDC
 
 
   Preencher a tabela t_bdcdata com os dados das telas e campos, usando os formulários f_bdc_dynpro e f_bdc_field:
