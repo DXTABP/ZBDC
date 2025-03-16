@@ -1,0 +1,34 @@
+Aqui está um exemplo de arquivo CSV que pode ser importado para a tabela ZMINHA_TABELA:
+ID,NOME,IDADE,CIDADE
+1,João Silva,30,São Paulo
+2,Maria Oliveira,25,Rio de Janeiro
+3,Carlos Souza,40,Belo Horizonte
+4,Ana Costa,35,Curitiba
+5,Pedro Rocha,28,Porto Alegre
+
+
+
+Formato do CSV
+Delimitador de Campos: , (vírgula)
+
+Delimitador de Texto: " (aspas duplas, opcional)
+Cabeçalho: A primeira linha contém os nomes dos campos.
+Dados: Cada linha subsequente contém os valores dos campos.
+
+Como Usar o Arquivo CSV
+Salve o Arquivo:
+
+Salve o conteúdo acima em um arquivo com extensão .csv, por exemplo: clientes.csv.
+
+Execute o Programa:
+
+No programa ABAP, insira os seguintes parâmetros na tela de seleção:
+p_path: Caminho completo do arquivo clientes.csv (ex: C:\clientes.csv).
+p_table: Nome da tabela do SAP (ex: ZMINHA_TABELA).
+
+Selecione o botão de rádio p_import para importar os dados.
+
+Resultado:
+O programa lerá o arquivo CSV, converterá os dados e os inserirá na tabela ZMINHA_TABELA.
+Se a importação for bem-sucedida, você verá a mensagem: Dados inseridos com sucesso!.
+
