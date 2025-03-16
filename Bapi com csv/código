@@ -1,0 +1,274 @@
+  * Declaração de um pool de tipos para uso no programa
+  TYPE-POOLS: truxs.
+  
+  * Definição de tipos de dados para a estrutura de pedidos de vendas
+  TYPES: BEGIN OF ty_pedidos_vendas,
+           cliente            TYPE kunnr,           " Número do cliente
+           data_pedido        TYPE datum,           " Data do pedido
+           material           TYPE matnr,           " Número do material
+           quantidade         TYPE menge_d,         " Quantidade do material
+           valor_unitario     TYPE kbetr,           " Valor unitário do material
+           organizacao_vendas TYPE vkorg,           " Organização de vendas
+           canal_distribuicao TYPE vtweg,           " Canal de distribuição
+           setor_atividade    TYPE spart,           " Setor de atividade
+         END OF ty_pedidos_vendas.
+  
+  * Definição de tipos de dados para a estrutura de relatório
+  TYPES: BEGIN OF ty_relatorio,
+           cliente      TYPE kunnr,                 " Número do cliente
+           material     TYPE matnr,                 " Número do material
+           status       TYPE char1,                 " Status do pedido (S = Sucesso, E = Erro)
+           mensagem     TYPE string,                " Mensagem de retorno
+           salesorder   TYPE vbeln,                 " Número da ordem de compra
+         END OF ty_relatorio.
+  
+  * Declaração de variáveis e tabelas internas
+  DATA: lt_pedidos_vendas  TYPE TABLE OF ty_pedidos_vendas,  " Tabela de pedidos de vendas
+        ls_pedidos_vendas  TYPE ty_pedidos_vendas,           " Estrutura de um pedido de venda
+        lv_caminho_arquivo TYPE string.                      " Caminho do arquivo a ser carregado
+  
+  DATA: lt_relatorio TYPE TABLE OF ty_relatorio,             " Tabela de relatório
+        ls_relatorio TYPE ty_relatorio.                      " Estrutura de um registro de relatório
+  
+  * Variáveis, tabelas e estruturas para uso com BAPI
+  DATA: lt_return     TYPE TABLE OF bapiret2,     " Tabela de mensagens de retorno da BAPI
+        ls_return     TYPE bapiret2,              " Estrutura para uma mensagem de retorno
+        ls_header     TYPE bapisdhd1,             " Cabeçalho do pedido de venda
+        ls_headerx    TYPE bapisdhd1x,            " Cabeçalho do pedido (indicadores de atualização)
+        lt_items      TYPE TABLE OF bapisditm,    " Tabela de itens do pedido
+        ls_items      TYPE bapisditm,             " Estrutura para um item do pedido
+        lt_itemsx     TYPE TABLE OF bapisditmx,   " Tabela de itens do pedido (indicadores de atualização)
+        ls_itemsx     TYPE bapisditmx,            " Estrutura para um item do pedido (indicadores)
+        lt_partners   TYPE TABLE OF bapiparnr,    " Tabela de parceiros do pedido
+        ls_partners   TYPE bapiparnr,             " Estrutura para um parceiro do pedido
+        lv_salesorder TYPE bapivbeln,             " Número do pedido criado
+        lt_schedule   TYPE TABLE OF bapischdl,    " Tabela para linhas de agendamento
+        ls_schedule   TYPE bapischdl,             " Estrutura para uma linha de agendamento
+        lt_schedulex  TYPE TABLE OF bapischdlx,   " Tabela para indicadores de atualização das linhas de agendamento
+        ls_schedulex  TYPE bapischdlx.            " Estrutura para indicadores de atualização
+  
+  * Tela de seleção para escolha do arquivo
+  SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-001.
+    PARAMETERS p_file TYPE rlgrap-filename OBLIGATORY.  " Parâmetro para o caminho do arquivo
+  SELECTION-SCREEN END OF BLOCK b1.
+  
+  * Chamada da função que abre a tela de seleção do arquivo
+  AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_file.
+    CALL FUNCTION 'WS_FILENAME_GET'
+      EXPORTING
+        def_filename     = lv_caminho_arquivo  " Caminho padrão do arquivo
+        mode             = 'O'                 " Modo de abertura (O = Open)
+        title            = 'Selecione o Arquivo'  " Título da janela de seleção
+      IMPORTING
+        filename         = lv_caminho_arquivo  " Caminho do arquivo selecionado
+      EXCEPTIONS
+        inv_winsys       = 1
+        no_batch         = 2
+        selection_cancel = 3
+        selection_error  = 4
+        OTHERS           = 5.
+    IF sy-subrc <> 0.
+      MESSAGE 'Erro ao selecionar o arquivo' TYPE 'S'.  " Mensagem de erro em caso de falha
+    ELSE.
+      p_file = lv_caminho_arquivo.  " Atribui o caminho do arquivo ao parâmetro
+    ENDIF.
+  
+  * Início do processamento principal
+  START-OF-SELECTION.
+    PERFORM f_load_file.  " Executa a rotina para carregar o arquivo
+  
+    LOOP AT lt_pedidos_vendas INTO ls_pedidos_vendas.  " Loop para processar cada pedido
+  
+      * Formatação dos campos com zeros à esquerda
+      CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+        EXPORTING
+          input  = ls_pedidos_vendas-cliente
+        IMPORTING
+          output = ls_pedidos_vendas-cliente.
+      CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+        EXPORTING
+          input  = ls_pedidos_vendas-organizacao_vendas
+        IMPORTING
+          output = ls_pedidos_vendas-organizacao_vendas.
+      CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+        EXPORTING
+          input  = ls_pedidos_vendas-canal_distribuicao
+        IMPORTING
+          output = ls_pedidos_vendas-canal_distribuicao.
+      CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+        EXPORTING
+          input  = ls_pedidos_vendas-setor_atividade
+        IMPORTING
+          output = ls_pedidos_vendas-setor_atividade.
+  
+      * Validação do cliente
+      SELECT SINGLE kunnr INTO ls_pedidos_vendas-cliente
+      FROM kna1
+      WHERE kunnr = ls_pedidos_vendas-cliente.
+      IF sy-subrc <> 0.
+        ls_relatorio-cliente = ls_pedidos_vendas-cliente.
+        ls_relatorio-material = ls_pedidos_vendas-material.
+        ls_relatorio-status = 'E'.
+        ls_relatorio-mensagem = 'Cliente não encontrado'.
+        APPEND ls_relatorio TO lt_relatorio.
+        CONTINUE.  " Pula para o próximo pedido se o cliente não for encontrado
+      ENDIF.
+  
+      * Validação do material
+      SELECT SINGLE matnr INTO ls_pedidos_vendas-material
+      FROM mara
+      WHERE matnr = ls_pedidos_vendas-material.
+      IF sy-subrc <> 0.
+        ls_relatorio-cliente = ls_pedidos_vendas-cliente.
+        ls_relatorio-material = ls_pedidos_vendas-material.
+        ls_relatorio-status = 'E'.
+        ls_relatorio-mensagem = 'Material não encontrado'.
+        APPEND ls_relatorio TO lt_relatorio.
+        CONTINUE.  " Pula para o próximo pedido se o material não for encontrado
+      ENDIF.
+  
+      * Preencher cabeçalho do pedido
+      ls_header-doc_type   = 'TA'.  " Tipo de documento
+      ls_header-sales_org  = ls_pedidos_vendas-organizacao_vendas.  " Organização de vendas
+      ls_header-distr_chan = ls_pedidos_vendas-canal_distribuicao.  " Canal de distribuição
+      ls_header-division   = ls_pedidos_vendas-setor_atividade.     " Setor de atividade
+  
+      ls_headerx-updateflag = 'I'.  " Indicador de inserção
+      ls_headerx-doc_type   = 'X'.  " Indicador de atualização para tipo de documento
+      ls_headerx-sales_org  = 'X'.  " Indicador de atualização para organização de vendas
+      ls_headerx-distr_chan = 'X'.  " Indicador de atualização para canal de distribuição
+      ls_headerx-division   = 'X'.  " Indicador de atualização para setor de atividade
+  
+      * Preencher item do pedido
+      ls_items-itm_number  = '000010'.  " Número do item
+      ls_items-material    = ls_pedidos_vendas-material.  " Material
+      ls_items-target_qty  = ls_pedidos_vendas-quantidade.  " Quantidade
+      APPEND ls_items TO lt_items.
+  
+      ls_itemsx-itm_number = '000010'.  " Número do item
+      ls_itemsx-material   = 'X'.       " Indicador de atualização para material
+      ls_itemsx-target_qty = 'X'.       " Indicador de atualização para quantidade
+      APPEND ls_itemsx TO lt_itemsx.
+  
+      * Preencher parceiros do pedido
+      ls_partners-partn_role = 'AG'.  " Papel do parceiro (AG = Agente)
+      ls_partners-partn_numb = ls_pedidos_vendas-cliente.  " Número do parceiro (cliente)
+      APPEND ls_partners TO lt_partners.
+  
+      * Preencher linha de agendamento
+      ls_schedule-itm_number = '000010'.  " Número do item
+      ls_schedule-sched_line = '0001'.    " Linha de agendamento
+      ls_schedule-req_qty    = ls_pedidos_vendas-quantidade.  " Quantidade requisitada
+      APPEND ls_schedule TO lt_schedule.
+  
+      ls_schedulex-itm_number = '000010'.  " Número do item
+      ls_schedulex-sched_line = '0001'.    " Linha de agendamento
+      ls_schedulex-updateflag = 'I'.       " Indicador de inserção
+      ls_schedulex-req_qty    = 'X'.       " Indicador de atualização para quantidade
+      APPEND ls_schedulex TO lt_schedulex.
+  
+      * Chamar a BAPI para criar o pedido de venda
+      CALL FUNCTION 'BAPI_SALESORDER_CREATEFROMDAT2'
+        EXPORTING
+          order_header_in  = ls_header
+          order_header_inx = ls_headerx
+        IMPORTING
+          salesdocument    = lv_salesorder  " Número do pedido criado
+        TABLES
+          return           = lt_return      " Mensagens de retorno
+          order_items_in   = lt_items       " Itens do pedido
+          order_items_inx  = lt_itemsx      " Itens do pedido (indicadores)
+          order_partners   = lt_partners.   " Parceiros do pedido
+  
+      * Verificar mensagens de retorno da BAPI
+      LOOP AT lt_return INTO ls_return WHERE type CA 'EA'.
+        IF ls_return-type = 'E' OR ls_return-type = 'A'.
+          ls_relatorio-status = 'E'.
+          ls_relatorio-mensagem = ls_return-message.
+          EXIT.
+        ENDIF.
+      ENDLOOP.
+  
+      * Condição, se não houver erros, confirmar a transação
+      IF ls_relatorio-status IS INITIAL.
+        ls_relatorio-status = 'S'.
+        ls_relatorio-mensagem = 'Pedido criado com sucesso'.
+        ls_relatorio-salesorder = lv_salesorder.
+        CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'
+          EXPORTING
+            wait = 'X'.  " Espera a confirmação da transação
+        MESSAGE s398(00) WITH 'Pedido criado com sucesso. Número:' lv_salesorder.
+      ELSE.
+        CALL FUNCTION 'BAPI_TRANSACTION_ROLLBACK'.  " Desfaz a transação em caso de erro
+      ENDIF.
+  
+      APPEND ls_relatorio TO lt_relatorio.  " Adiciona o resultado ao relatório
+  
+      * Limpar variáveis para o próximo pedido
+      CLEAR: ls_header, ls_headerx, lt_items, lt_itemsx, lt_partners, lt_return, ls_relatorio.
+    ENDLOOP.
+  
+  * Exibir relatório em ALV (ABAP List Viewer)
+    IF lt_relatorio IS NOT INITIAL.
+      TRY.
+          cl_salv_table=>factory(
+            IMPORTING
+              r_salv_table = DATA(lo_alv)  " Instância do ALV
+            CHANGING
+              t_table      = lt_relatorio ).
+  
+          DATA(lo_columns) = lo_alv->get_columns( ).
+          lo_columns->set_optimize( abap_true ).  " Otimiza a largura das colunas
+  
+          lo_alv->display( ).  " Exibe o relatório
+        CATCH cx_salv_msg INTO DATA(lo_exception).
+          MESSAGE lo_exception->get_text( ) TYPE 'E'.  " Mensagem de erro em caso de falha
+      ENDTRY.
+    ELSE.
+      MESSAGE 'Nenhum dado encontrado para exibição.' TYPE 'S' DISPLAY LIKE 'E'.  " Mensagem se não houver dados
+    ENDIF.
+  
+  *&---------------------------------------------------------------------*
+  *& Form f_load_file
+  *&---------------------------------------------------------------------*
+  FORM f_load_file.
+    DATA: lt_raw TYPE truxs_t_text_data.
+  
+    * Carrega o arquivo selecionado
+    CALL METHOD cl_gui_frontend_services=>gui_upload
+      EXPORTING
+        filename                = lv_caminho_arquivo
+      CHANGING
+        data_tab                = lt_raw
+      EXCEPTIONS
+        file_open_error         = 1
+        file_read_error         = 2
+        no_batch                = 3
+        gui_refuse_filetransfer = 4
+        invalid_type            = 5
+        no_authority            = 6
+        OTHERS                  = 7.
+  
+    IF sy-subrc <> 0.
+      MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+        WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+      RETURN.
+    ENDIF.
+  
+    * Converte o arquivo carregado para o formato SAP
+    CALL FUNCTION 'TEXT_CONVERT_TEX_TO_SAP'
+      EXPORTING
+        i_field_seperator    = ';'  " Separador de campos
+        i_line_header        = 'X'  " Indica se há cabeçalho no arquivo
+        i_tab_raw_data       = lt_raw
+      TABLES
+        i_tab_converted_data = lt_pedidos_vendas  " Tabela de pedidos de vendas
+      EXCEPTIONS
+        conversion_failed    = 1
+        OTHERS               = 2.
+  
+    IF sy-subrc <> 0.
+      MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+        WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+    ENDIF.
+  ENDFORM.
