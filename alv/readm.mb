@@ -1,1 +1,60 @@
-le
+Este código ABAP é um programa que consulta dados de ordens de venda no SAP e exibe os resultados em uma tela ALV (ABAP List Viewer)
+Ele busca informações de várias tabelas do SAP (VBAK, KNA1, VBAP, MAKT) e as 
+combina em uma única estrutura para exibição. Vou explicar o que ele faz em detalhes:
+O programa tem como objetivo:
+
+Consultar dados de ordens de venda (VBAK).
+
+Combinar informações de clientes (KNA1), itens de pedidos (VBAP) e descrições de materiais (MAKT).
+
+Exibir os dados em uma tela ALV, com colunas otimizadas para melhor visualização.
+
+
+Consulta de Dados:
+
+O programa consulta a tabela VBAK (cabeçalho de ordens de venda) com base nos filtros fornecidos.
+
+Em seguida, consulta as tabelas KNA1 (dados do cliente), VBAP (itens do pedido) e MAKT (descrição dos materiais) para complementar as informações.
+
+Combinação de Dados:
+
+Os dados das tabelas são combinados em uma única estrutura (ty_alv) para exibição no ALV.
+
+Para cada ordem de venda (VBAK), o programa busca o nome do cliente (KNA1), os itens do pedido (VBAP) e a descrição dos materiais (MAKT).
+
+Exibição no ALV:
+
+Os dados são exibidos em uma tela ALV, com colunas otimizadas para melhor visualização.
+
+3. Fluxo do Programa
+Consulta de Ordens de Venda (VBAK):
+
+O programa consulta a tabela VBAK com base nos filtros fornecidos (s_vbeln, s_kunnr, s_audat).
+
+Os resultados são armazenados na tabela interna lt_vbak.
+
+Consulta de Dados do Cliente (KNA1):
+
+Para cada ordem de venda, o programa busca o nome do cliente na tabela KNA1.
+
+Os resultados são armazenados na tabela interna lt_kna1.
+
+Consulta de Itens do Pedido (VBAP):
+
+Para cada ordem de venda, o programa busca os itens do pedido na tabela VBAP.
+
+Os resultados são armazenados na tabela interna lt_vbap.
+
+Consulta de Descrição dos Materiais (MAKT):
+
+Para cada item do pedido, o programa busca a descrição do material na tabela MAKT.
+
+Os resultados são armazenados na tabela interna lt_makt.
+
+Combinação de Dados:
+
+Os dados das tabelas são combinados em uma única estrutura (ty_alv) e armazenados na tabela interna lt_alv.
+
+Exibição no ALV:
+
+A tabela lt_alv é exibida em uma tela ALV, com colunas otimizadas.
