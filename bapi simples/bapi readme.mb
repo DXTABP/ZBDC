@@ -1,1 +1,77 @@
-c
+O programa foi desenvolvido para criar uma Ordem de Venda (OV) no SAP de forma automatizada, utilizando a BAPI BAPI_SALESORDER_CREATEFROMDAT2.
+Ele coleta dados de entrada do usuário, preenche as estruturas necessárias e chama a BAPI para criar a ordem de venda.
+Funcionalidades Principais
+Entrada de Dados:
+
+O programa solicita ao usuário os seguintes dados através de uma tela de seleção:
+
+Tipo de documento (ex: OR - Ordem de Venda).
+
+Organização de vendas(  ).
+Canal de distribuição(  ).
+Setor de atividade(  ).
+Número do cliente(  ).
+Número do material(  ).
+Quantidade do material(  ).
+Data de entrega solicitada(  ).
+
+Preenchimento das Estruturas:
+Os dados fornecidos pelo usuário são usados para preencher as estruturas necessárias para a criação da ordem de venda:
+Cabeçalho do Pedido: Tipo de documento, organização de vendas, canal de distribuição, setor de atividade e moeda.
+
+Itens do Pedido: Material, centro e quantidade.
+Agendamentos de Entrega: Data de entrega solicitada e quantidade.
+Parceiros do Pedido: Número do cliente.
+
+Chamada da BAPI:
+
+A BAPI BAPI_SALESORDER_CREATEFROMDAT2 é chamada para criar a ordem de venda. As estruturas preenchidas são passadas como parâmetros.
+
+Verificação de Mensagens:
+O programa verifica as mensagens de retorno da BAPI para identificar erros ou avisos. Se houver problemas, eles são exibidos ao usuário.
+
+Confirmação da Transação:
+Se a ordem de venda for criada com sucesso, a transação é confirmada no banco de dados usando a função BAPI_TRANSACTION_COMMIT.
+
+Feedback ao Usuário:
+
+O programa exibe uma mensagem de sucesso com o número do documento de vendas criado.
+
+Fluxo do Programa
+Tela de Seleção:
+O usuário insere os dados necessários para a criação da ordem de venda.
+
+Processamento:
+
+O programa preenche as estruturas com os dados fornecidos.
+
+A BAPI é chamada para criar a ordem de venda.
+
+As mensagens de retorno são verificadas.
+
+Saída:
+
+Se a ordem for criada com sucesso, o número do documento de vendas é exibido.
+
+Se houver erros, eles são exibidos ao usuário.
+
+Exemplo de Uso
+Entrada de Dados:
+
+O usuário preenche a tela de seleção com os seguintes valores:
+
+Tipo de documento: OR
+Organização de vendas: 1000
+Canal de distribuição: 10
+Setor de atividade: 00
+Cliente: 1001
+Material: MAT001
+Quantidade: 10
+Data de entrega solicitada: 20231001
+
+Processamento:
+O programa cria a ordem de venda com os dados fornecidos.
+
+Saída:
+Se a ordem for criada com sucesso, o programa exibe:
+(Pedido 90000001 criado com sucesso!)
