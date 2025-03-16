@@ -1,0 +1,117 @@
+REPORT ZRR_SAMPLE.
+
+* Declaração da tabela SPFLI (tabela de voos)
+TABLES: spfli.
+
+* Declaração de variáveis
+DATA: it_table   TYPE STANDARD TABLE OF spfli WITH HEADER LINE, " Tabela interna para armazenar dados da SPFLI
+      l_dom      TYPE REF TO if_ixml_element,                  " Referência para um elemento DOM
+      m_document TYPE REF TO if_ixml_document,                 " Referência para o documento DOM
+      m_xmldoc   TYPE REF TO cl_xml_document,                  " Referência para o documento XML
+      g_ixml     TYPE REF TO if_ixml,                          " Referência para o framework iXML
+      w_result   TYPE i,                                       " Variável para armazenar resultados de operações
+      w_rc       LIKE sy-subrc.                                " Variável para armazenar códigos de retorno
+
+* Variável para armazenar o caminho do arquivo temporário
+DATA: p_file_tmp LIKE rlgrap-filename.
+
+* Tela de seleção para entrada do usuário
+SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE text-001.
+
+* Filtro para a companhia aérea (CARRID)
+SELECT-OPTIONS: s_carrid FOR spfli-carrid.
+
+* Parâmetro para o caminho do arquivo de saída
+PARAMETERS: p_file LIKE rlgrap-filename OBLIGATORY DEFAULT 'C:\spfli'.
+
+SELECTION-SCREEN END OF BLOCK b1.
+
+* Início do processamento
+START-OF-SELECTION.
+
+  * Seleciona os dados da tabela SPFLI com base no filtro de companhia aérea
+  SELECT * FROM spfli INTO TABLE it_table WHERE carrid IN s_carrid.
+
+* Fim do processamento
+END-OF-SELECTION.
+
+* *******************************************
+* *** Inicializa o framework iXML          ****
+* *******************************************
+  CLASS cl_ixml DEFINITION LOAD.
+
+  * Cria uma instância do framework iXML
+  g_ixml = cl_ixml=>create( ).
+
+  * Verifica se a instância foi criada com sucesso
+  CHECK NOT g_ixml IS INITIAL.
+
+* *******************************************
+* *** Cria o documento DOM vazio           ****
+* *******************************************
+  m_document = g_ixml->create_document( ).
+
+  * Verifica se o documento DOM foi criado com sucesso
+  CHECK NOT m_document IS INITIAL.
+
+* *******************************************
+* *** Converte a tabela interna em DOM     ****
+* *******************************************
+  CALL FUNCTION 'SDIXML_DATA_TO_DOM'
+    EXPORTING
+      name         = 'DADOS'          " Nome do nó raiz do XML
+      dataobject   = it_table[]       " Tabela interna com os dados
+    IMPORTING
+      data_as_dom  = l_dom            " Elemento DOM gerado
+    CHANGING
+      document     = m_document       " Documento DOM onde o elemento será adicionado
+    EXCEPTIONS
+      illegal_name = 1                " Exceção: nome inválido
+      OTHERS       = 2.               " Outras exceções
+
+  * Verifica se houve erro na conversão
+  IF NOT sy-subrc = 0.
+    WRITE: /'Erro DADOS -> DOM: ', sy-subrc.
+  ENDIF.
+
+  * Verifica se o elemento DOM foi criado com sucesso
+  CHECK NOT l_dom IS INITIAL.
+
+* *******************************************
+* *** Adiciona o elemento DOM ao documento iXML ****
+* *******************************************
+  w_rc = m_document->append_child( new_child = l_dom ).
+
+  * Verifica se houve erro ao adicionar o elemento DOM
+  IF NOT w_rc IS INITIAL.
+    WRITE: /'Erro DOM -> iXML: ', w_rc.
+  ENDIF.
+
+* *******************************************
+* *** Cria o documento XML a partir do DOM ****
+* *******************************************
+  CREATE OBJECT m_xmldoc.
+
+  * Verifica se o objeto XML foi criado com sucesso
+  CHECK NOT m_xmldoc IS INITIAL.
+
+  * Gera o XML a partir do DOM
+  w_rc = m_xmldoc->create_with_dom( document = m_document ).
+
+  * Verifica se houve erro na geração do XML
+  IF NOT w_rc IS INITIAL.
+    WRITE: /'Erro DOM+iXML -> XML: ', w_rc.
+  ENDIF.
+
+* *******************************************
+* *** Exibe o arquivo XML na tela          ****
+* *******************************************
+  CALL METHOD m_xmldoc->display.
+
+* *******************************************
+* *** Salva o arquivo XML no caminho especificado ****
+* *******************************************
+  CONCATENATE p_file '.xml' INTO p_file_tmp. " Adiciona a extensão .xml ao nome do arquivo
+
+  * Exporta o XML para o arquivo
+  CALL METHOD m_xmldoc->export_to_file( filename = p_file_tmp ).
