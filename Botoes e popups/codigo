@@ -1,0 +1,138 @@
+*&---------------------------------------------------------------------*
+*& Relatório:
+*& Descrição: Exemplo de tela de seleção com diversos controles e eventos.
+*&---------------------------------------------------------------------*
+
+REPORT zxxxx.
+*---------------------------------------------------------------------*
+* Bloco 1: Parâmetro obrigatório
+*---------------------------------------------------------------------*
+SELECTION-SCREEN BEGIN OF BLOCK part1 WITH FRAME TITLE TEXT-001.
+  PARAMETERS p_obrig(10) TYPE c OBLIGATORY.  " Parâmetro obrigatório
+SELECTION-SCREEN END OF BLOCK part1.
+
+*---------------------------------------------------------------------*
+* Bloco 2: Parâmetros com comprimentos visíveis diferentes
+*---------------------------------------------------------------------*
+SELECTION-SCREEN BEGIN OF BLOCK part2 WITH FRAME TITLE TEXT-002.
+  PARAMETERS: p_f1(10) TYPE c VISIBLE LENGTH 1,  " Campo com comprimento visível 1
+              p_f4(10) TYPE c VISIBLE LENGTH 5,  " Campo com comprimento visível 5
+              p_p3(10) TYPE c VISIBLE LENGTH 10. " Campo com comprimento visível 10
+SELECTION-SCREEN END OF BLOCK part2.
+
+*---------------------------------------------------------------------*
+* Bloco 3: Checkboxes com comportamento dinâmico
+*---------------------------------------------------------------------*
+SELECTION-SCREEN BEGIN OF BLOCK part3 WITH FRAME TITLE TEXT-003.
+  PARAMETERS: p_a AS CHECKBOX USER-COMMAND flag,  " Checkbox 1
+              p_b AS CHECKBOX DEFAULT 'X' USER-COMMAND flag.  " Checkbox 2 (marcado por padrão)
+SELECTION-SCREEN END OF BLOCK part3.
+
+*---------------------------------------------------------------------*
+* Bloco 4: Botões de rádio (grupo 1)
+*---------------------------------------------------------------------*
+SELECTION-SCREEN BEGIN OF BLOCK part4 WITH FRAME TITLE TEXT-004.
+  PARAMETERS: p_r1 RADIOBUTTON GROUP rad1,  " Botão de rádio 1
+              p_r2 RADIOBUTTON GROUP rad1 DEFAULT 'X',  " Botão de rádio 2 (selecionado por padrão)
+              p_r3 RADIOBUTTON GROUP rad1.  " Botão de rádio 3
+SELECTION-SCREEN END OF BLOCK part4.
+
+*---------------------------------------------------------------------*
+* Bloco 5: Botões de rádio (grupo 2)
+*---------------------------------------------------------------------*
+SELECTION-SCREEN BEGIN OF BLOCK part5 WITH FRAME TITLE TEXT-005.
+  PARAMETERS: p_s1 RADIOBUTTON GROUP rad2,  " Botão de rádio 1
+              p_s2 RADIOBUTTON GROUP rad2,  " Botão de rádio 2
+              p_s3 RADIOBUTTON GROUP rad2 DEFAULT 'X'.  " Botão de rádio 3 (selecionado por padrão)
+SELECTION-SCREEN END OF BLOCK part5.
+
+*---------------------------------------------------------------------*
+* Bloco 6: Listbox para seleção de uma companhia aérea
+*---------------------------------------------------------------------*
+SELECTION-SCREEN BEGIN OF BLOCK part6 WITH FRAME TITLE TEXT-006.
+  PARAMETERS p_carrid TYPE spfli-carrid  " Listbox para selecionar uma companhia aérea
+                      AS LISTBOX VISIBLE LENGTH 20  " Comprimento visível 20
+                      DEFAULT 'LH'.  " Valor padrão 'LH' (Lufthansa)
+SELECTION-SCREEN END OF BLOCK part6.
+
+*---------------------------------------------------------------------*
+* Bloco 7: Parâmetros com modificadores de grupo (para controle dinâmico)
+*---------------------------------------------------------------------*
+SELECTION-SCREEN BEGIN OF BLOCK part7 WITH FRAME TITLE TEXT-007.
+  PARAMETERS: test1(10) TYPE c MODIF ID sc1,  " Parâmetro com modificador sc1
+              test2(10) TYPE c MODIF ID sc2,  " Parâmetro com modificador sc2
+              test3(10) TYPE c MODIF ID sc1,  " Parâmetro com modificador sc1
+              test4(10) TYPE c MODIF ID sc2.  " Parâmetro com modificador sc2
+SELECTION-SCREEN END OF BLOCK part7.
+
+*---------------------------------------------------------------------*
+* Evento: Ajuda (F1) para o campo p_f1
+*---------------------------------------------------------------------*
+AT SELECTION-SCREEN ON HELP-REQUEST FOR p_f1.  " Quando o usuário pressionar F1 no campo p_f1
+  MESSAGE 'Você selecionou o F1!' TYPE 'I'.  " Exibe uma mensagem informativa
+
+*---------------------------------------------------------------------*
+* Evento: Ajuda de pesquisa (F4) para o campo p_f4
+*---------------------------------------------------------------------*
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_f4.  " Quando o usuário pressionar F4 no campo p_f4
+  MESSAGE 'Você selecionou o F4!' TYPE 'I'.  " Exibe uma mensagem informativa
+
+*---------------------------------------------------------------------*
+* Evento: Manipulação da tela de seleção (AT SELECTION-SCREEN OUTPUT)
+*---------------------------------------------------------------------*
+AT SELECTION-SCREEN OUTPUT.
+  LOOP AT SCREEN INTO DATA(ls_screen).
+   "Oculta campos com MODIF ID sc1 se p_a não estiver marcado
+    IF p_a <> 'X' AND
+       ls_screen-group1 = 'SC1'.
+      ls_screen-active = '0'.  " Desativa o campo
+    ENDIF.
+
+   "Oculta campos com MODIF ID sc2 se p_b não estiver marcado
+    IF p_b <> 'X' AND
+       ls_screen-group1 = 'SC2'.
+      ls_screen-active = '0'.  " Desativa o campo
+    ENDIF.
+
+    "Destaca campos com MODIF ID sc1
+    IF ls_screen-group1 = 'SC1'.
+      ls_screen-intensified = '1'.  " Destaca o campo
+      MODIFY SCREEN FROM ls_screen.
+      CONTINUE.
+    ENDIF.
+
+    "Remove destaque de campos com MODIF ID sc2
+    IF ls_screen-group1 = 'SC2'.
+      ls_screen-intensified = '0'.  " Remove o destaque
+      MODIFY SCREEN FROM ls_screen.
+    ENDIF.
+  ENDLOOP.
+
+*---------------------------------------------------------------------*
+* Início do processamento principal
+*---------------------------------------------------------------------*
+START-OF-SELECTION.
+  PERFORM f_seleciona_dados.  " Chama a subrotina para processar os dados
+
+*---------------------------------------------------------------------*
+* Subrotina: Processamento dos dados
+*---------------------------------------------------------------------*
+FORM f_seleciona_dados.
+  " Verifica qual botão de rádio do grupo rad1 foi selecionado
+  CASE 'X'.
+    WHEN p_r1.
+      WRITE: / 'R1 selecionado '.
+    WHEN p_r2.
+      WRITE: / 'R2 selecionado'.
+    WHEN p_r3.
+      WRITE: / 'R3 selecionado'.
+    WHEN OTHERS.
+     " Tratativa para casos não previstos
+  ENDCASE.
+
+ " Exibe os valores dos parâmetros p_f1, p_f4 e p_p3
+  WRITE:
+         / 'F1:', p_f1,  " Exibe o valor de p_f1
+         / 'F2:', p_f4,  " Exibe o valor de p_f4
+         / 'P3:', p_p3.  " Exibe o valor de p_p3
+ENDFORM.
