@@ -1,0 +1,137 @@
+Passo a Passo para Criar as Telas (Screen 100, 200 e 300)
+Execute a transação SE80.
+
+No campo de seleção, escolha Program e insira o nome do seu programa (Z_xxxx).
+
+Clique em Enter ou no botão de confirmação.
+
+Passo 2: Criar as Telas (Screens)
+No menu à esquerda, expanda o nó do seu programa.
+
+Clique com o botão direito em Screens e selecione Create.
+
+Insira o número da tela (por exemplo, 100 para a tela de edição de cliente) e clique em OK.
+
+Repita o processo para criar as telas 200 e 300.
+
+Passo 3: Projetar a Tela 100 (Edição de Cliente)
+Na lista de telas, clique duas vezes na tela 100 para abrir o Screen Painter.
+
+No Screen Painter, você verá uma área de trabalho onde pode adicionar elementos visuais.
+
+Adicionar Elementos à Tela:
+Campos de Entrada:
+
+Clique no ícone Field (ou pressione F6) para adicionar campos de entrada.
+
+Insira os nomes dos campos da estrutura zcli_08:
+
+zcli_08-nome
+zcli_08-cpf
+zcli_08-cidade
+zcli_08-estado
+
+Posicione os campos na tela de forma organizada.
+
+Botões:
+
+Clique no ícone Pushbutton (ou pressione F9) para adicionar botões.
+
+Crie três botões:
+Salvar (USER-COMMAND: SALVAR)
+Excluir (USER-COMMAND: DELETE)
+Voltar (USER-COMMAND: BACK)
+
+Defina os textos dos botões e posicione-os na tela.
+
+Labels (Rótulos):Use o ícone Text (ou pressione F7) para adicionar rótulos descritivos ao lado dos campos (por exemplo, "Nome:", "CPF:", etc.).
+
+Salvar e Ativar:Após projetar a tela, salve e ative-a clicando no ícone de discoete ou pressionando Ctrl + F3.
+
+Configurar o Código da Tela 100
+No Screen Painter, vá para a aba Flow Logic.
+
+No PBO (Process Before Output), adicione o seguinte código:
+  MODULE status_0100 OUTPUT.
+  SET PF-STATUS 'STANDARD'.
+  SET TITLEBAR '100'.
+ENDMODULE.
+
+Isso define o status da tela (botões e menus) e o título.
+No PAI (Process After Input), adicione o seguinte código:    
+    MODULE user_command_0100 INPUT.
+  CASE sy-ucomm.
+    WHEN 'SALVAR'.
+      " Lógica para salvar os dados do cliente
+      UPDATE zcli_08 SET nome = zcli_08-nome,
+                        cpf = zcli_08-cpf,
+                        cidade = zcli_08-cidade,
+                        estado = zcli_08-estado
+                 WHERE iddocliente = zcli_08-iddocliente.
+      IF sy-subrc = 0.
+        MESSAGE 'Cliente atualizado com sucesso!' TYPE 'S'.
+      ELSE.
+        MESSAGE 'Erro ao atualizar o cliente!' TYPE 'E'.
+      ENDIF.
+    WHEN 'DELETE'.
+      " Lógica para excluir o cliente
+      DELETE FROM zcli_08 WHERE iddocliente = zcli_08-iddocliente.
+      IF sy-subrc = 0.
+        MESSAGE 'Cliente excluído com sucesso!' TYPE 'S'.
+      ELSE.
+        MESSAGE 'Erro ao excluir o cliente!' TYPE 'E'.
+      ENDIF.
+      LEAVE TO SCREEN 0.
+    WHEN 'BACK' OR 'EXIT' OR 'CANCEL'.
+      LEAVE TO SCREEN 0.
+  ENDCASE.
+ENDMODULE.
+
+
+    Salve e ative a lógica da tela.
+
+Passo 5: Criar as Telas 200 e 300
+Repita o processo acima para as telas 200 (Edição de Material) e 300 (Edição de Pedido), ajustando os campos e a lógica conforme necessário.
+
+Tela 200 (Edição de Material):
+Campos:
+
+zmatrl_08-descricaodomaterial
+zmatrl_08-unidadedemedida
+zmatrl_08-preco
+
+Botões:
+
+"Salvar" (USER-COMMAND: SAVE)
+"Excluir" (USER-COMMAND: DELETE)
+"Voltar" (USER-COMMAND: BACK)
+
+Tela 300 (Edição de Pedido):
+Campos:
+
+zped_08-iddocliente
+zped_08-material
+zped_08-datadopedido
+zped_08-statusdopedido
+zped_08-valortotal
+
+Botões:
+
+"Salvar" (USER-COMMAND: SAVE)
+"Excluir" (USER-COMMAND: DELETE)
+"Voltar" (USER-COMMAND: BACK)
+
+Passo 6: Vincular as Telas ao Programa
+No código do programa, as telas já estão sendo chamadas com os comandos:
+
+CALL SCREEN 100 (para edição de cliente)
+CALL SCREEN 200 (para edição de material)
+CALL SCREEN 300 (para edição de pedido)
+
+Certifique-se de que os módulos status_0100, user_command_0100, status_200, user_command_200, status_300 e user_command_300 estejam corretamente implementados.
+
+Passo 7: Testar as Telas
+Execute o programa (Z_SEM2_EXER2_ALUNO_08) no ambiente SAP.
+Navegue até as opções de edição (clientes, materiais ou pedidos) e verifique se as telas são exibidas corretamente.
+Teste as funcionalidades de salvar, excluir e voltar.
+
