@@ -1,0 +1,176 @@
+:* Empresa..:
+* Id.......:
+* Programa.: Z_xxxx
+* Transação:
+* Descrição: programa com interface para preenchimento de dados das tebalas(zcli_08, zmatrl_08, zped_08).
+* Autor....: BRUNO DA SILVA OLIVEIRA
+* Data.....: 
+*update:
+
+REPORT z_xxxxxxxx.
+
+TABLES: zcli_08, zmatrl_08, zped_08.
+
+"Definições de tipos para a tabela ZCLI_08
+TYPES: BEGIN OF ty_cliente,
+         mandt TYPE mandt, " Mandante
+         iddocliente TYPE kunnr, " ID do Cliente
+         nome TYPE zenome8, " Nome do Cliente
+         cpf TYPE zecpf8, " CPF do Cliente
+         rua TYPE zerua8, " Rua
+         bairro TYPE zebairro8, " Bairro
+         cidade TYPE zecidade8, " Cidade
+         estado TYPE zeestado, " Estado
+         dataderegistro TYPE datum, " Data de Registro
+         criadopor TYPE zecriadopor8, " Criado por
+       END OF ty_cliente.
+
+"Definições de tipos para a tabela ZPED_08
+TYPES: BEGIN OF ty_pedido,
+         mandt TYPE mandt, " Mandante
+         iddopedido TYPE kunnr, " ID do Pedido
+         iddocliente TYPE kunnr, " ID do Cliente
+         datadopedido TYPE datn, " Data do Pedido
+         material TYPE matnr, " Material
+         valortotal TYPE kbetr, " Valor Total
+         quantidade TYPE menge_d, " Quantidade
+         statusdopedido TYPE zestatus, " Status do Pedido
+       END OF ty_pedido.
+
+"Definições de tipos para a tabela ZMATRL_08
+TYPES: BEGIN OF ty_material,
+         mandt TYPE mandt, " Mandante
+         idmat TYPE matnr, " ID do Material
+         desc TYPE maktx, " Descrição do Material
+         unmed TYPE msehi, " Unidade de Medida
+         preco TYPE kbetr, " Preço do Material
+         dtcri TYPE dats, " Data de Criação
+         criad TYPE zecria8, " Criado por
+       END OF ty_material.
+
+"Declaração das tabelas internas e estruturas locais
+DATA: gt_clientes TYPE TABLE OF ty_cliente WITH EMPTY KEY,
+      ls_cliente TYPE ty_cliente,
+      gt_pedidos TYPE TABLE OF ty_pedido WITH EMPTY KEY,
+      ls_pedido TYPE ty_pedido,
+      gt_materiais TYPE TABLE OF ty_material WITH EMPTY KEY,
+      ls_material TYPE ty_material.
+
+" Tela de seleção para inserção de dados de clientes
+SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE text-001.
+  PARAMETERS: p_mandt TYPE mandt,
+              p_idcl TYPE kunnr,
+              p_nome TYPE zenome8,
+              p_cpf TYPE zecpf8,
+              p_rua TYPE zerua8,
+              p_bairro TYPE zebairro8,
+              p_cidade TYPE zecidade8,
+              p_estado TYPE zeestado,
+              p_dtreg TYPE datum,
+              p_criado TYPE zecriadopor8.
+SELECTION-SCREEN END OF BLOCK b1.
+
+"Tela de seleção para inserção de dados de pedidos
+SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE text-002.
+  PARAMETERS: p_idped TYPE kunnr,
+              p_idcl_p TYPE kunnr,
+              p_dtped TYPE datn,
+              p_mat TYPE matnr,
+              p_valtot TYPE kbetr,
+              p_qtd TYPE menge_d,
+              p_status TYPE zestatus.
+SELECTION-SCREEN END OF BLOCK b2.
+
+"Tela de seleção para inserção de dados de materiais
+SELECTION-SCREEN BEGIN OF BLOCK b3 WITH FRAME TITLE text-003.
+  PARAMETERS: p2_idmat TYPE matnr,
+              p2_desc TYPE maktx,
+              p2_unmed TYPE msehi,
+              p2_preco TYPE kbetr,
+              p2_dtcri TYPE dats,
+              p2_criad TYPE zecria8.
+SELECTION-SCREEN END OF BLOCK b3.
+
+START-OF-SELECTION.
+
+  " Inserir dados de clientes na tabela interna
+  ls_cliente = VALUE #(
+    mandt = p_mandt
+    iddocliente = p_idcl
+    nome = p_nome
+    cpf = p_cpf
+    rua = p_rua
+    bairro = p_bairro
+    cidade = p_cidade
+    estado = p_estado
+    dataderegistro = p_dtreg
+    criadopor = p_criado
+  ).
+  APPEND ls_cliente TO gt_clientes.
+
+  LOOP AT gt_clientes INTO ls_cliente.
+    SELECT SINGLE * FROM zcli_08 WHERE cpf = ls_cliente-cpf.
+    IF sy-subrc = 0.
+      WRITE: / 'Erro: CPF já cadastrado.', ls_cliente-cpf.
+    ELSE.
+      INSERT zcli_08 FROM ls_cliente.
+      IF sy-subrc = 0.
+        WRITE: / 'Cliente inserido com sucesso: ', ls_cliente-nome.
+      ELSE.
+        WRITE: / 'Erro ao inserir cliente: ', ls_cliente-nome.
+      ENDIF.
+    ENDIF.
+  ENDLOOP.
+
+  " Inserir dados de pedidos na tabela interna
+  ls_pedido = VALUE #(
+    mandt = sy-mandt
+    iddopedido = p_idped
+    iddocliente = p_idcl_p
+    datadopedido = p_dtped
+    material = p_mat
+    valortotal = p_valtot
+    quantidade = p_qtd
+    statusdopedido = p_status
+  ).
+  APPEND ls_pedido TO gt_pedidos.
+
+  LOOP AT gt_pedidos INTO ls_pedido.
+    SELECT SINGLE * FROM zped_08 WHERE iddopedido = ls_pedido-iddopedido.
+    IF sy-subrc = 0.
+      WRITE: / 'Erro: Pedido já cadastrado.', ls_pedido-iddopedido.
+    ELSE.
+      INSERT zped_08 FROM ls_pedido.
+      IF sy-subrc = 0.
+        WRITE: / 'Pedido inserido com sucesso: ', ls_pedido-iddopedido.
+      ELSE.
+        WRITE: / 'Erro ao inserir pedido: ', ls_pedido-iddopedido.
+      ENDIF.
+    ENDIF.
+  ENDLOOP.
+
+  " Inserir dados de materiais na tabela interna
+  ls_material = VALUE #(
+    mandt = sy-mandt
+    idmat = p2_idmat
+    desc = p2_desc
+    unmed = p2_unmed
+    preco = p2_preco
+    dtcri = p2_dtcri
+    criad = p2_criad
+  ).
+  APPEND ls_material TO gt_materiais.
+
+  LOOP AT gt_materiais INTO ls_material.
+    SELECT SINGLE * FROM zmatrl_08 WHERE IDDOMATERIAL = ls_material-idmat.
+    IF sy-subrc = 0.
+      WRITE: / 'Erro: Material já cadastrado.', ls_material-idmat.
+    ELSE.
+      INSERT zmatrl_08 FROM ls_material.
+      IF sy-subrc = 0.
+        WRITE: / 'Material inserido com sucesso: ', ls_material-desc.
+      ELSE.
+        WRITE: / 'Erro ao inserir material: ', ls_material-desc.
+      ENDIF.
+    ENDIF.
+  ENDLOOP.
