@@ -1,0 +1,66 @@
+O programa exporta dados da tabela SPFLI (tabela de voos do SAP) para um arquivo XML. 
+Ele permite ao usuário filtrar os dados por companhia aérea e salvar o resultado em um arquivo XML no sistema de arquivos local.
+
+Seleção de Dados:
+
+O programa seleciona dados da tabela SPFLI com base em um filtro de companhia aérea (s_carrid).
+
+Conversão para XML:
+Os dados selecionados são convertidos em um documento XML usando o framework iXML do SAP.
+
+Exibição do XML:
+O XML gerado é exibido na tela para visualização imediata.
+
+Salvamento do XML:
+O XML é salvo em um arquivo no caminho especificado pelo usuário (por exemplo, C:\spfli.xml).
+
+Fluxo do Programa
+Entrada do Usuário:
+
+O usuário informa:
+
+A companhia aérea para filtrar os dados (s_carrid).
+O caminho do arquivo onde o XML será salvo (p_file).
+
+Processamento:
+
+O programa seleciona os dados da tabela SPFLI com base no filtro.
+Converte os dados em XML.
+Exibe o XML na tela.
+Salva o XML no arquivo especificado.
+ o programa pode ser adaptado para funcionar com qualquer tabela do SAP, não apenas com a tabela SPFLI. Para isso, basta fazer algumas modificações no código
+Substituir a Tabela SPFLI:
+
+No código, substitua todas as referências à tabela SPFLI pela tabela desejada. Por exemplo, se você quiser usar a tabela SFLIGHT, substitua:
+TABLES: spfli.
+DATA: it_table TYPE STANDARD TABLE OF spfli WITH HEADER LINE.
+Por:
+TABLES: sflight.
+DATA: it_table TYPE STANDARD TABLE OF sflight WITH HEADER LINE.
+
+Atualizar a Seleção de Dados:
+No SELECT, substitua a tabela SPFLI pela nova tabela. Por exemplo: SELECT * FROM sflight INTO TABLE it_table WHERE carrid IN s_carrid.
+Atualizar os Filtros:
+
+Se a nova tabela tiver campos diferentes, atualize os filtros na tela de seleção (SELECT-OPTIONS). 
+Por exemplo, se a tabela SFLIGHT tiver um campo connid, você pode adicionar um filtro para ele: SELECT-OPTIONS: s_connid FOR sflight-connid.
+Manter a Lógica de Conversão para XML:
+
+A lógica de conversão para XML (SDIXML_DATA_TO_DOM) e a criação do arquivo XML (cl_xml_document) não precisam ser alteradas, pois funcionam com qualquer tabela.
+Como Funciona com Qualquer Tabela
+Substitua a Tabela:
+
+Substitua sflight pelo nome da tabela desejada.
+
+Atualize os Filtros:Adicione ou remova SELECT-OPTIONS conforme os campos da nova tabela.
+
+Mantenha a Lógica de Conversão:A função SDIXML_DATA_TO_DOM e o objeto cl_xml_document funcionam com qualquer tabela.
+
+
+
+
+
+
+
+
+ 
