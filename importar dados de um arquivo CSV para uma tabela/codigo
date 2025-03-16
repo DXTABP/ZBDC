@@ -1,0 +1,313 @@
+*&---------------------------------------------------------------------*
+*& Relatório: 
+*& Descrição: Programa para importar dados de um arquivo CSV para uma tabela do SAP  e exibir dados de uma tabela em um relatório ALV.
+*& Autor....: BRUNO DA SILVA OLIVEIRA
+*& Data.....: 
+*&---------------------------------------------------------------------*
+REPORT Z_xxxxx.
+
+*---------------------------------------------------------------------*
+* Declarações de variáveis e estruturas
+*---------------------------------------------------------------------*
+DATA: t_csv_bruto           TYPE truxs_t_text_data,  " Armazena as linhas brutas do arquivo CSV
+      t_arquivo_selecionado TYPE filetable,          " Armazena o caminho do arquivo CSV selecionado
+      t_tabela_gerada       TYPE REF TO data,        " Tabela interna dinâmica para processar dados do CSV
+      t_tabela_gerada_final TYPE REF TO data,        " Tabela interna dinâmica para armazenar dados convertidos
+      t_campo_split         TYPE TABLE OF string.    " Tabela para armazenar campos divididos de uma linha CSV
+
+DATA: w_linha_dados_lidos      TYPE REF TO data,     " Work area para uma linha da tabela dinâmica
+      w_linha_dados_lidos_final TYPE REF TO data,    " Work area para uma linha da tabela final
+      w_arquivo_selecionado    LIKE LINE OF t_arquivo_selecionado,  " Armazena o arquivo selecionado
+      w_dps_ponto              TYPE string.          " Armazena parte de uma string após o ponto
+
+DATA: l_delimita_linhas        TYPE cl_rsda_csv_converter=>char,  " Delimitador de linhas no CSV
+      l_separa_campos          TYPE cl_rsda_csv_converter=>char,  " Separador de campos no CSV
+      l_mensagem               TYPE string,                       " Mensagem concatenada
+      l_mensagem_erro          TYPE string,                       " Mensagem de erro
+      l_rc                     TYPE i,                            " Código de retorno
+      l_nome_tabela            TYPE dd02l-tabname,                " Nome da tabela do SAP
+      l_root_exception         TYPE REF TO cx_root,               " Referência para exceções
+      l_csv_converter          TYPE REF TO cl_rsda_csv_converter, " Conversor de CSV para estrutura
+      l_salv_table             TYPE REF TO cl_salv_table.         " Referência para o ALV
+
+FIELD-SYMBOLS: <f_dados_lidos>          TYPE ANY TABLE,  " Field symbol para tabela dinâmica de dados lidos
+               <f_dados_lidos_final>    TYPE ANY TABLE,  " Field symbol para tabela dinâmica final
+               <f_linha_dados_lidos>    TYPE any,        " Field symbol para uma linha da tabela dinâmica
+               <f_linha_dados_lidos_final> TYPE any.     " Field symbol para uma linha da tabela final
+
+*---------------------------------------------------------------------*
+* Tela de seleção
+*---------------------------------------------------------------------*
+SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-001.
+  PARAMETERS: p_path  TYPE string,  " Caminho do arquivo CSV
+              p_table TYPE string.  " Nome da tabela do SAP
+SELECTION-SCREEN END OF BLOCK b1.
+
+SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE TEXT-002.
+  PARAMETERS: p_import RADIOBUTTON GROUP rad DEFAULT 'X' USER-COMMAND zm_muda_seletor,  " Botão de rádio para importação
+              p_alv    RADIOBUTTON GROUP rad.  " Botão de rádio para exibição em ALV
+SELECTION-SCREEN END OF BLOCK b2.
+
+*---------------------------------------------------------------------*
+* Evento: Abrir seletor de arquivo para o campo p_path
+*---------------------------------------------------------------------*
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_path.
+  IF p_import = 'X'.
+    PERFORM zf_abri_selecao_arquivo.  " Abre o seletor de arquivo
+  ENDIF.
+
+*---------------------------------------------------------------------*
+* Evento: Desabilitar campo p_path se o botão de rádio p_alv estiver selecionado
+*---------------------------------------------------------------------*
+AT SELECTION-SCREEN OUTPUT.
+  IF p_alv = 'X'.
+    LOOP AT SCREEN.
+      IF screen-name = 'P_PATH'.
+        p_path = ''.
+        screen-input = 0.
+        MODIFY SCREEN.
+      ENDIF.
+    ENDLOOP.
+  ENDIF.
+
+*---------------------------------------------------------------------*
+* Início do processamento principal
+*---------------------------------------------------------------------*
+START-OF-SELECTION.
+
+ "Configuração inicial
+  l_nome_tabela     = p_table.  " Define o nome da tabela
+  l_delimita_linhas = '"'.      " Delimitador de linhas no CSV
+  l_separa_campos   = ','.      " Separador de campos no CSV
+
+ "Execução
+  IF p_import = 'X'.
+    PERFORM zf_valida_parametros_import.  " Valida parâmetros e inicia a importação
+  ELSEIF p_alv = 'X'.
+    PERFORM zf_exibe_tabela.  " Exibe os dados da tabela em ALV
+  ENDIF.
+
+*---------------------------------------------------------------------*
+* Subrotina: Abrir seletor de arquivo
+*---------------------------------------------------------------------*
+FORM zf_abri_selecao_arquivo.
+
+  TRY.
+      CALL METHOD cl_gui_frontend_services=>file_open_dialog
+        EXPORTING
+          window_title            = 'Arquivo CSV'  " Título da janela
+          file_filter             = 'CSV Files (*.csv)|*.csv'  " Filtro de arquivos
+          initial_directory       = 'c:\'  " Diretório inicial
+        CHANGING
+          file_table              = t_arquivo_selecionado  " Tabela de arquivos selecionados
+          rc                      = l_rc  " Código de retorno
+        EXCEPTIONS
+          file_open_dialog_failed = 1
+          cntl_error              = 2
+          error_no_gui            = 3
+          not_supported_by_gui    = 4
+          OTHERS                  = 5.
+
+      IF sy-subrc = 0.
+        READ TABLE t_arquivo_selecionado INTO w_arquivo_selecionado INDEX 1.
+        p_path = w_arquivo_selecionado-filename.  " Atualiza o campo p_path com o arquivo selecionado
+      ENDIF.
+
+    CATCH cx_root INTO l_root_exception.
+      l_mensagem_erro = l_root_exception->get_text( ).
+      CONCATENATE 'Erro ao abrir seletor de arquivo:' l_mensagem_erro INTO l_mensagem_erro.
+      MESSAGE l_mensagem_erro TYPE 'I'.  " Exibe mensagem de erro
+  ENDTRY.
+
+ENDFORM.
+
+*---------------------------------------------------------------------*
+* Subrotina: Validar parâmetros para importação
+*---------------------------------------------------------------------*
+FORM zf_valida_parametros_import.
+
+  IF p_path IS INITIAL.
+    MESSAGE 'O caminho do arquivo CSV é obrigatório.' TYPE 'I'.
+  ELSEIF p_table IS INITIAL.
+    MESSAGE 'O nome da tabela é obrigatório.' TYPE 'I'.
+  ELSEIF p_table(1) <> 'z' AND p_table(1) <> 'Z'.
+    MESSAGE 'A tabela deve começar com "Z".' TYPE 'I'.
+  ELSE.
+    PERFORM zf_le_csv.  " Inicia a leitura do CSV
+  ENDIF.
+
+ENDFORM.
+
+*---------------------------------------------------------------------*
+* Subrotina: Ler arquivo CSV
+*---------------------------------------------------------------------*
+FORM zf_le_csv.
+
+  TRY.
+      " Gera uma tabela dinâmica com a estrutura da tabela informada
+      CALL FUNCTION 'ZF_GERA_TABELA_ORI08'
+        EXPORTING
+          p_nome_tabela   = p_table
+          p_tipo_dado     = 'string'
+        CHANGING
+          t_tabela_gerada = t_tabela_gerada
+        EXCEPTIONS
+          OTHERS          = 1.
+
+      IF sy-subrc = 0.
+        ASSIGN t_tabela_gerada->* TO <f_dados_lidos>.  " Associa a tabela dinâmica ao field symbol
+
+       "Lê o arquivo CSV
+        CALL FUNCTION 'GUI_UPLOAD'
+          EXPORTING
+            filename = p_path
+            filetype = 'ASC'
+          TABLES
+            data_tab = t_csv_bruto
+          EXCEPTIONS
+            OTHERS   = 1.
+
+        IF sy-subrc = 0.
+          PERFORM zf_processa_csv.  " Processa o CSV
+        ELSE.
+          MESSAGE 'Erro ao ler o arquivo CSV.' TYPE 'I'.
+        ENDIF.
+      ENDIF.
+
+    CATCH cx_root INTO l_root_exception.
+      l_mensagem_erro = l_root_exception->get_text( ).
+      CONCATENATE 'Erro ao ler o CSV:' l_mensagem_erro INTO l_mensagem_erro.
+      MESSAGE l_mensagem_erro TYPE 'I'.
+  ENDTRY.
+
+ENDFORM.
+
+*---------------------------------------------------------------------*
+* Subrotina: Processar arquivo CSV
+*---------------------------------------------------------------------*
+FORM zf_processa_csv.
+
+  TRY.
+     "Cria o conversor de CSV
+      l_csv_converter = cl_rsda_csv_converter=>create(
+        i_delimiter = l_delimita_linhas
+        i_separator = l_separa_campos
+      ).
+
+      IF sy-subrc = 0.
+        "Processa cada linha do CSV
+        LOOP AT t_csv_bruto INTO DATA(w_linha_csv_bruto).
+          CALL METHOD l_csv_converter->csv_to_structure
+            EXPORTING
+              i_data   = w_linha_csv_bruto
+            IMPORTING
+              e_s_data = <f_linha_dados_lidos>.
+
+          INSERT <f_linha_dados_lidos> INTO TABLE <f_dados_lidos>.  " Insere a linha na tabela dinâmica
+        ENDLOOP.
+
+        PERFORM zf_insere_dados_tabela.  " Insere os dados na tabela do SAP
+      ENDIF.
+
+    CATCH cx_root INTO l_root_exception.
+      l_mensagem_erro = l_root_exception->get_text( ).
+      CONCATENATE 'Erro ao processar o CSV:' l_mensagem_erro INTO l_mensagem_erro.
+      MESSAGE l_mensagem_erro TYPE 'I'.
+  ENDTRY.
+
+ENDFORM.
+
+*---------------------------------------------------------------------*
+* Subrotina: Inserir dados na tabela do SAP
+*---------------------------------------------------------------------*
+FORM zf_insere_dados_tabela.
+
+  TRY.
+      "Gera a tabela dinâmica final
+      CALL FUNCTION 'ZF_GERA_TABELA_ORI08'
+        EXPORTING
+          p_nome_tabela   = p_table
+          p_tipo_dado     = 'final'
+        CHANGING
+          t_tabela_gerada = t_tabela_gerada_final
+        EXCEPTIONS
+          OTHERS          = 1.
+
+      IF sy-subrc = 0.
+        ASSIGN t_tabela_gerada_final->* TO <f_dados_lidos_final>.  " Associa a tabela dinâmica ao field symbol
+
+        " Converte e insere os dados na tabela do SAP
+        LOOP AT <f_dados_lidos> ASSIGNING <f_linha_dados_lidos>.
+          MOVE-CORRESPONDING <f_linha_dados_lidos> TO <f_linha_dados_lidos_final>.
+          INSERT <f_linha_dados_lidos_final> INTO TABLE <f_dados_lidos_final>.
+        ENDLOOP.
+
+        INSERT (l_nome_tabela) FROM TABLE <f_dados_lidos_final>.  " Insere os dados na tabela do SAP
+        COMMIT WORK.  " Confirma a transação
+
+        IF sy-dbcnt = 0.
+          MESSAGE 'Nenhum dado foi inserido.' TYPE 'I'.
+        ELSE.
+          MESSAGE 'Dados inseridos com sucesso!' TYPE 'I'.
+        ENDIF.
+      ENDIF.
+
+    CATCH cx_root INTO l_root_exception.
+      ROLLBACK WORK.  " Desfaz a transação em caso de erro
+      l_mensagem_erro = l_root_exception->get_text( ).
+      CONCATENATE 'Erro ao inserir dados:' l_mensagem_erro INTO l_mensagem_erro.
+      MESSAGE l_mensagem_erro TYPE 'I'.
+  ENDTRY.
+
+ENDFORM.
+
+*---------------------------------------------------------------------*
+* Subrotina: Exibir tabela em ALV
+*---------------------------------------------------------------------*
+FORM zf_exibe_tabela.
+
+  IF p_table IS INITIAL.
+    MESSAGE 'O nome da tabela é obrigatório.' TYPE 'I'.
+  ELSE.
+    TRY.
+       "Gera a tabela dinâmica
+        CALL FUNCTION 'ZF_GERA_TABELA_ORI08'
+          EXPORTING
+            p_nome_tabela   = p_table
+            p_tipo_dado     = 'clone'
+          CHANGING
+            t_tabela_gerada = t_tabela_gerada
+          EXCEPTIONS
+            OTHERS          = 1.
+
+        IF sy-subrc = 0.
+          ASSIGN t_tabela_gerada->* TO <f_dados_lidos>.
+
+        "Seleciona os dados da tabela do SAP
+          SELECT *
+            FROM (l_nome_tabela)
+            INTO CORRESPONDING FIELDS OF TABLE <f_dados_lidos>.
+
+        "Exibe os dados em ALV
+          cl_salv_table=>factory(
+            IMPORTING
+              r_salv_table = l_salv_table
+            CHANGING
+              t_table      = <f_dados_lidos> ).
+
+          IF sy-subrc = 0.
+            l_salv_table->get_columns( )->set_optimize( abap_true ).  " Otimiza as colunas
+            l_salv_table->display( ).  " Exibe o ALV
+          ELSE.
+            MESSAGE 'Erro ao exibir o ALV.' TYPE 'I'.
+          ENDIF.
+        ENDIF.
+
+      CATCH cx_root INTO l_root_exception.
+        l_mensagem_erro = l_root_exception->get_text( ).
+        CONCATENATE 'Erro ao exibir a tabela:' l_mensagem_erro INTO l_mensagem_erro.
+        MESSAGE l_mensagem_erro TYPE 'I'.
+    ENDTRY.
+  ENDIF.
+
+ENDFORM.
