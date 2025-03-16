@@ -1,0 +1,296 @@
+*&---------------------------------------------------------------------*
+*& Relatório: 
+*& Descrição: Programa para gerenciar dados de clientes, materiais e pedidos.
+*&            Permite listar, filtrar e editar registros nas tabelas zcli_08,zmatrl_08 e zped_08.
+*& Autor....: BRUNO DA SILVA OLIVEIRA
+*& Data.....: 
+*&---------------------------------------------------------------------*
+REPORT Z_xxxxxxxx.
+
+* Declaração das tabelas utilizadas
+TABLES: zcli_08, zmatrl_08, zped_08.
+
+* Variável para cálculo de valor total
+DATA valortotal.
+
+*---------------------------------------------------------------------*
+* Tela de Seleção
+*---------------------------------------------------------------------*
+SELECTION-SCREEN BEGIN OF BLOCK bl1 WITH FRAME TITLE text-001.
+  PARAMETERS: rb_cli RADIOBUTTON GROUP grp DEFAULT 'X' USER-COMMAND ucom,  " Listar Clientes
+              rb_mat RADIOBUTTON GROUP grp,  " Listar Materiais
+              rb_ped RADIOBUTTON GROUP grp,  " Listar Pedidos
+              rb_edi RADIOBUTTON GROUP grp.  " Editar Cliente
+SELECTION-SCREEN END OF BLOCK bl1.
+
+* Filtros para Clientes
+SELECTION-SCREEN BEGIN OF BLOCK bl2 WITH FRAME TITLE text-002.
+  SELECT-OPTIONS: s_idcli FOR zcli_08-iddocliente MODIF ID cli,  " ID Cliente
+                  s_nome  FOR zcli_08-nome MODIF ID cli,  " Nome
+                  s_cpf   FOR zcli_08-cpf MODIF ID cli,  " CPF
+                  s_cid   FOR zcli_08-cidade MODIF ID cli,  " Cidade
+                  s_uf    FOR zcli_08-estado MODIF ID cli.  " Estado
+SELECTION-SCREEN END OF BLOCK bl2.
+
+* Filtros para Materiais
+SELECTION-SCREEN BEGIN OF BLOCK bl3 WITH FRAME TITLE text-003.
+  SELECT-OPTIONS: s_idmat FOR zmatrl_08-iddomaterial MODIF ID mat,  " ID Material
+                  s_nommat FOR zmatrl_08-descricaodomaterial MODIF ID mat.  " Descrição do Material
+SELECTION-SCREEN END OF BLOCK bl3.
+
+* Filtros para Pedidos
+SELECTION-SCREEN BEGIN OF BLOCK bl4 WITH FRAME TITLE text-004.
+  SELECT-OPTIONS: s_idped FOR zpedido_08-iddopedido MODIF ID ped,  " ID Pedido
+                  s_idcli2 FOR zpedido_08-iddocliente MODIF ID ped,  " ID Cliente
+                  s_mat    FOR zpedido_08-material MODIF ID ped,  " Material
+                  s_dtped  FOR zpedido_08-datadopedido MODIF ID ped.  " Data do Pedido
+SELECTION-SCREEN END OF BLOCK bl4.
+
+* Filtro para Editar Cliente
+SELECTION-SCREEN BEGIN OF BLOCK bl5 WITH FRAME TITLE text-005.
+  PARAMETERS: p_editid TYPE zcli_08-iddocliente MODIF ID edi.  " Editar Cliente por ID
+SELECTION-SCREEN END OF BLOCK bl5.
+
+* Botões para edição
+SELECTION-SCREEN: ULINE /10(80).
+SELECTION-SCREEN: PUSHBUTTON /4(20) text-006 USER-COMMAND edit_cli.  " Botão Editar Cliente
+SELECTION-SCREEN: PUSHBUTTON 32(20) text-007 USER-COMMAND edit_mat.  " Botão Editar Material
+SELECTION-SCREEN: PUSHBUTTON 62(20) text-008 USER-COMMAND edit_ped.  " Botão Editar Pedido
+
+*---------------------------------------------------------------------*
+* Evento: Controle de visibilidade dos blocos de filtros
+*---------------------------------------------------------------------*
+AT SELECTION-SCREEN OUTPUT.
+  LOOP AT SCREEN INTO DATA(ls_screen).
+    " Oculta todos os filtros inicialmente
+    IF ls_screen-group1 = 'CLI' OR ls_screen-group1 = 'MAT' OR ls_screen-group1 = 'PED' OR ls_screen-group1 = 'EDI'.
+      ls_screen-active = '0'.
+    ENDIF.
+
+    " Exibe os filtros conforme a opção selecionada
+    CASE abap_true.
+      WHEN rb_cli.
+        IF ls_screen-group1 = 'CLI'.
+          ls_screen-active = '1'.
+        ENDIF.
+      WHEN rb_mat.
+        IF ls_screen-group1 = 'MAT'.
+          ls_screen-active = '1'.
+        ENDIF.
+      WHEN rb_ped.
+        IF ls_screen-group1 = 'PED'.
+          ls_screen-active = '1'.
+        ENDIF.
+      WHEN rb_edi.
+        IF ls_screen-group1 = 'EDI'.
+          ls_screen-active = '1'.
+        ENDIF.
+    ENDCASE.
+
+    MODIFY SCREEN FROM ls_screen.
+  ENDLOOP.
+
+*---------------------------------------------------------------------*
+* Início do processamento principal
+*---------------------------------------------------------------------*
+START-OF-SELECTION.
+  " Validação: Se nenhum filtro for informado, exibir mensagem de erro
+  IF ( rb_cli = 'X' AND s_idcli IS INITIAL AND s_nome IS INITIAL AND s_cpf IS INITIAL AND s_cid IS INITIAL AND s_UF IS INITIAL ) OR
+     ( rb_mat = 'X' AND s_idmat IS INITIAL AND s_nommat IS INITIAL ) OR
+     ( rb_ped = 'X' AND s_idped IS INITIAL AND s_idcli2 IS INITIAL AND s_mat IS INITIAL AND s_dtped IS INITIAL ) OR
+     ( rb_edi = 'X' AND p_editid IS INITIAL ).
+    MESSAGE 'Erro: Informe pelo menos um critério de filtro!' TYPE 'E'.
+  ENDIF.
+
+  " Executa a funcionalidade selecionada
+  IF rb_cli = 'X'.
+    PERFORM listar_cli.
+  ELSEIF rb_mat = 'X'.
+    PERFORM listar_mat.
+  ELSEIF rb_ped = 'X'.
+    PERFORM listar_ped.
+  ELSEIF rb_edi = 'X'.
+    CALL SCREEN 100.  " Chama a tela de edição de cliente
+  ENDIF.
+
+*---------------------------------------------------------------------*
+* Subrotinas para listagem de dados
+*---------------------------------------------------------------------*
+FORM listar_cli.
+  DATA: lt_cli TYPE TABLE OF zcli_08, ls_cli TYPE zcli_08.
+  SELECT * FROM zcli_08 INTO TABLE lt_cli
+    WHERE iddocliente IN s_idcli AND nome IN s_nome AND cpf IN s_cpf AND cidade IN s_cid AND estado IN s_uf.
+  IF lt_cli IS INITIAL.
+    WRITE: / 'Nenhum cliente encontrado!'.
+    EXIT.
+  ENDIF.
+  WRITE: / 'ID', 10 'Nome', 30 'CPF', 45 'Cidade', 50 'Estado'.
+  WRITE: / sy-uline(80).
+  LOOP AT lt_cli INTO ls_cli.
+    WRITE: / ls_cli-iddocliente, ls_cli-nome, ls_cli-cpf, ls_cli-cidade, ls_cli-estado.
+  ENDLOOP.
+  PERFORM exibir_alv USING lt_cli.
+ENDFORM.
+
+FORM listar_mat.
+  DATA: lt_mat TYPE TABLE OF zmatrl_08, ls_mat TYPE zmatrl_08.
+  SELECT * FROM zmatrl_08 INTO TABLE lt_mat
+    WHERE iddomaterial IN s_idmat AND descricaodomaterial IN s_nommat.
+  IF lt_mat IS INITIAL.
+    WRITE: / 'Nenhum material encontrado!'.
+    EXIT.
+  ENDIF.
+  WRITE: / 'ID', 10 'Descrição', 40 'Unidade', 50 'Preço'.
+  WRITE: / sy-uline(80).
+  LOOP AT lt_mat INTO ls_mat.
+    WRITE: / ls_mat-iddomaterial, ls_mat-descricaodomaterial, ls_mat-unidadedemedida, valortotal.
+  ENDLOOP.
+  PERFORM exibir_alv USING lt_mat.
+ENDFORM.
+
+FORM listar_ped.
+  DATA: lt_ped TYPE TABLE OF zped_08, ls_ped TYPE zped_08.
+  SELECT * FROM zped_08 INTO TABLE lt_ped
+    WHERE iddopedido IN s_idped AND iddocliente IN s_idcli2 AND material IN s_mat AND datadopedido IN s_dtped.
+  IF lt_ped IS INITIAL.
+    WRITE: / 'Nenhum pedido encontrado!'.
+    EXIT.
+  ENDIF.
+  WRITE: / 'ID Pedido', 15 'ID Cliente', 30 'Data', 45 'Status', 60 'Valor Total'.
+  WRITE: / sy-uline(80).
+  LOOP AT lt_ped INTO ls_ped.
+    WRITE: / ls_ped-iddopedido, ls_ped-iddocliente, ls_ped-datadopedido, ls_ped-statusdopedido, ls_ped-valortotal.
+  ENDLOOP.
+  PERFORM exibir_alv USING lt_ped.
+ENDFORM.
+
+*---------------------------------------------------------------------*
+* Subrotina para exibir dados em ALV
+*---------------------------------------------------------------------*
+FORM exibir_alv USING lt_dados TYPE TABLE.
+  DATA: lo_alv TYPE REF TO cl_salv_table.
+  TRY.
+      cl_salv_table=>factory(
+        IMPORTING r_salv_table = lo_alv
+        CHANGING  t_table      = lt_dados ).
+      lo_alv->display( ).
+    CATCH cx_salv_msg.
+      WRITE: / 'Erro ao exibir ALV!'.
+  ENDTRY.
+ENDFORM.
+
+*---------------------------------------------------------------------*
+* Evento: Tratamento dos botões de edição
+*---------------------------------------------------------------------*
+AT SELECTION-SCREEN.
+  CASE sy-ucomm.
+    WHEN 'EDIT_CLI'.  " Botão de Editar Cliente
+      CALL SCREEN 100.  " Chama a tela 100
+
+    WHEN 'EDIT_MAT'.  " Botão de Editar Material
+      CALL SCREEN 200.  " Chama a tela 200
+
+    WHEN 'EDIT_PED'.  " Botão de Editar Pedido
+      CALL SCREEN 300.  " Chama a tela 300
+  ENDCASE.
+
+*---------------------------------------------------------------------*
+* Módulos das telas de edição
+*---------------------------------------------------------------------*
+* Tela 100: Edição de Cliente
+MODULE status_0100 OUTPUT.
+  SET PF-STATUS 'STANDARD'.  " Define o menu de botões
+  SET TITLEBAR '100'.  " Define o título da tela
+ENDMODULE.
+
+MODULE user_command_0100 INPUT.
+  CASE sy-ucomm.
+    WHEN 'SALVAR'.
+      " Atualiza os dados do cliente
+      UPDATE zcli_08 SET nome = @zcli_08-nome,
+                        cpf = @zcli_08-cpf,
+                        cidade = @zcli_08-cidade,
+                        estado = @zcli_08-estado
+                 WHERE iddocliente = @zcli_08-iddocliente.
+      COMMIT WORK.
+      IF sy-subrc = 0.
+        MESSAGE 'Cliente atualizado com sucesso!' TYPE 'S'.
+      ELSE.
+        MESSAGE 'Erro ao atualizar os dados do cliente!' TYPE 'E'.
+      ENDIF.
+
+    WHEN 'DELETE'.
+      " Remove o cliente
+      DELETE FROM zcli_08 WHERE iddocliente = @zcli_08-iddocliente.
+      COMMIT WORK.
+      IF sy-subrc = 0.
+        MESSAGE 'Cliente excluído com sucesso!' TYPE 'S'.
+      ELSE.
+        MESSAGE 'Erro ao excluir o cliente!' TYPE 'E'.
+      ENDIF.
+      LEAVE TO SCREEN 0.
+
+    WHEN 'BACK' OR 'EXIT' OR 'CANCEL'.
+      LEAVE TO SCREEN 0.  " Sai da tela
+  ENDCASE.
+ENDMODULE.
+
+* Tela 200: Edição de Material
+MODULE status_200 OUTPUT.
+  SET PF-STATUS 'STANDARD'.
+  SET TITLEBAR '200'.
+ENDMODULE.
+
+MODULE user_command_200 INPUT.
+  CASE sy-ucomm.
+    WHEN 'SAVE'.
+      UPDATE zmatrl_08 SET descricaodomaterial = zmatrl_08-descricaodomaterial
+                  WHERE iddomaterial = zmatrl_08-iddomaterial.
+      COMMIT WORK.
+      IF sy-subrc = 0.
+        MESSAGE 'Material atualizado com sucesso!' TYPE 'S'.
+      ELSE.
+        MESSAGE 'Erro ao atualizar os dados do material!' TYPE 'E'.
+      ENDIF.
+
+    WHEN 'DELETE'.
+      DELETE FROM zmatrl_08 WHERE iddomaterial = zmatrl_08-iddomaterial.
+      COMMIT WORK.
+      MESSAGE 'Material excluído com sucesso!' TYPE 'S'.
+      LEAVE TO SCREEN 0.
+
+    WHEN 'BACK' OR 'EXIT' OR 'CANCEL'.
+      LEAVE TO SCREEN 0.
+  ENDCASE.
+ENDMODULE.
+
+* Tela 300: Edição de Pedido
+MODULE status_300 OUTPUT.
+  SET PF-STATUS 'STANDARD'.
+  SET TITLEBAR '300'.
+ENDMODULE.
+
+MODULE user_command_300 INPUT.
+  CASE sy-ucomm.
+    WHEN 'SAVE'.
+      UPDATE zped_08 SET iddocliente = @zped_08-iddocliente,
+                        material = @zped_08-material,
+                        datadopedido = @zped_08-datadopedido
+                  WHERE iddopedido = @zped_08-iddopedido.
+      COMMIT WORK.
+      IF sy-subrc = 0.
+        MESSAGE 'Pedido atualizado com sucesso!' TYPE 'S'.
+      ELSE.
+        MESSAGE 'Erro ao atualizar os dados do pedido!' TYPE 'E'.
+      ENDIF.
+
+    WHEN 'DELETE'.
+      DELETE FROM zped_08 WHERE iddopedido = zped_08-iddopedido.
+      COMMIT WORK.
+      MESSAGE 'Pedido excluído com sucesso!' TYPE 'S'.
+      LEAVE TO SCREEN 0.
+
+    WHEN 'BACK' OR 'EXIT' OR 'CANCEL'.
+      LEAVE TO SCREEN 0.
+  ENDCASE.
+ENDMODULE.
