@@ -1,0 +1,117 @@
+*&---------------------------------------------------------------------*
+*& Relatório:
+*& Descrição: Programa para criação de Ordem de Venda (OV) usando a BAPI BAPI_SALESORDER_CREATEFROMDAT2.
+*& Autor....: 
+*& Data.....:
+*&---------------------------------------------------------------------*
+
+*---------------------------------------------------------------------*
+* Declaração de variáveis e estruturas
+*---------------------------------------------------------------------*
+DATA: t_order_items      TYPE TABLE OF BAPISDITM,  " Tabela de itens do pedido
+      s_order_items      TYPE BAPISDITM,          " Estrutura de um item do pedido
+      t_order_items_x    TYPE TABLE OF BAPISDITMX,  " Tabela de indicadores de atualização dos itens
+      s_order_items_x    TYPE BAPISDITMX,          " Estrutura de indicadores de atualização dos itens
+      t_return           TYPE TABLE OF BAPIRET2,    " Tabela de mensagens de retorno da BAPI
+      s_return           TYPE BAPIRET2,            " Estrutura de uma mensagem de retorno
+      t_order_schedules  TYPE TABLE OF BAPISCHDL,  " Tabela de agendamentos do pedido
+      s_order_schedules  TYPE BAPISCHDL,          " Estrutura de um agendamento do pedido
+      t_order_schedules_x TYPE TABLE OF BAPISCHDLX,  " Tabela de indicadores de atualização dos agendamentos
+      s_order_schedules_x TYPE BAPISCHDLX,          " Estrutura de indicadores de atualização dos agendamentos
+      t_order_partners   TYPE TABLE OF BAPIPARNR,  " Tabela de parceiros do pedido
+      s_order_partners   TYPE BAPIPARNR,          " Estrutura de um parceiro do pedido
+      order_header       TYPE BAPISDHD1,          " Estrutura do cabeçalho do pedido
+      order_header_x     TYPE BAPISDHD1X,          " Estrutura de indicadores de atualização do cabeçalho
+      v_salesdocument    TYPE BAPIVBELN-VBELN.    " Número do documento de vendas criado
+
+*---------------------------------------------------------------------*
+* Tela de seleção para entrada de dados
+*---------------------------------------------------------------------*
+SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE text-001.
+  PARAMETERS: p_doc TYPE AUART,      " Tipo de documento (ex: OR - Ordem de Venda)
+              p_sales TYPE VKORG,    " Organização de vendas
+              p_dis TYPE VTWEG,      " Canal de distribuição
+              p_div      TYPE SPART, " Setor de atividade
+              p_soldto   TYPE KUNNR, " Número do cliente
+              p_matnr    TYPE MATNR, " Número do material
+              p_qty      TYPE KWMENG, " Quantidade do material
+              p_reqd     TYPE DATs.  " Data de entrega solicitada
+SELECTION-SCREEN END OF BLOCK b1.
+
+*---------------------------------------------------------------------*
+* Início do processamento principal
+*---------------------------------------------------------------------*
+START-OF-SELECTION.
+
+  "Preenchendo os dados do cabeçalho do pedido
+  order_header-doc_type  = p_doc.        " Tipo de documento
+  order_header-sales_org = p_sales.      " Organização de vendas
+  order_header-distr_chan = p_dis.       " Canal de distribuição
+  order_header-division = p_div.         " Setor de atividade
+  order_header-currency = 'BRL'.         " Moeda (BRL)
+
+  "Preenchendo os indicadores de atualização do cabeçalho
+  order_header_x-doc_type  = 'X'.        " Indicador de atualização para tipo de documento
+  order_header_x-sales_org = 'X'.        " Indicador de atualização para organização de vendas
+  order_header_x-distr_chan = 'X'.       " Indicador de atualização para canal de distribuição
+  order_header_x-division = 'X'.         " Indicador de atualização para setor de atividade
+  order_header_x-currency = 'X'.         " Indicador de atualização para moeda
+
+  "Preenchendo os itens do pedido
+  s_order_items-itm_number = '000010'.   " Número do item (fixo para o primeiro item)
+  s_order_items-material   = p_matnr.    " Material
+  s_order_items-plant      = '1000'.     " Centro (fixo)
+  s_order_items-target_qty = p_qty.      " Quantidade
+  APPEND s_order_items TO t_order_items.  " Adiciona o item à tabela de itens
+
+ "Preenchendo os indicadores de atualização dos itens
+  s_order_items_x-itm_number = '000010'. " Indicador de atualização para número do item
+  s_order_items_x-material   = 'X'.      " Indicador de atualização para material
+  s_order_items_x-plant      = 'X'.      " Indicador de atualização para centro
+  s_order_items_x-target_qty = 'X'.      " Indicador de atualização para quantidade
+  APPEND s_order_items_x TO t_order_items_x.  " Adiciona à tabela de indicadores
+
+   "Preenchendo a programação de entrega
+  s_order_schedules-itm_number = '000010'.  " Número do item
+  s_order_schedules-req_date   = p_reqd.    " Data de entrega solicitada
+  s_order_schedules-req_qty    = p_qty.     " Quantidade
+  APPEND s_order_schedules TO t_order_schedules.  " Adiciona à tabela de agendamentos
+
+   "Preenchendo os indicadores de atualização dos agendamentos
+  s_order_schedules_x-itm_number = '000010'.  " Indicador de atualização para número do item
+  s_order_schedules_x-req_date   = 'X'.       " Indicador de atualização para data de entrega
+  s_order_schedules_x-req_qty    = 'X'.       " Indicador de atualização para quantidade
+  APPEND s_order_schedules_x TO t_order_schedules_x.  " Adiciona à tabela de indicadores
+
+   " Preenchendo os parceiros do pedido
+  s_order_partners-partn_role = 'AG'.  " Papel do parceiro (AG = Agente)
+  s_order_partners-partn_numb = p_soldto.  " Número do cliente
+  APPEND s_order_partners TO t_order_partners.  " Adiciona à tabela de parceiros
+
+   "Chamada da BAPI para criar a ordem de venda
+  CALL FUNCTION 'BAPI_SALESORDER_CREATEFROMDAT2'
+    EXPORTING
+      order_header_in    = order_header       " Cabeçalho do pedido
+      order_header_inx   = order_header_x     " Indicadores de atualização do cabeçalho
+    IMPORTING
+      salesdocument      = v_salesdocument    " Número do documento de vendas criado
+    TABLES
+      order_items_in     = t_order_items      " Itens do pedido
+      order_items_inx    = t_order_items_x    " Indicadores de atualização dos itens
+      order_schedules_in = t_order_schedules  " Agendamentos do pedido
+      order_schedules_inx = t_order_schedules_x  " Indicadores de atualização dos agendamentos
+      order_partners     = t_order_partners   " Parceiros do pedido
+      return             = t_return.          " Mensagens de retorno
+
+  "Verificando mensagens de retorno da BAPI
+  LOOP AT t_return INTO s_return.
+    MESSAGE s_return-message TYPE s_return-type.  " Exibe as mensagens de retorno
+  ENDLOOP.
+
+  "Confirma a transação no banco de dados
+  CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'
+    EXPORTING
+      wait = 'X'.  " Espera a confirmação da transação
+
+ "Exibe uma mensagem de sucesso com o número do documento criado
+  MESSAGE |Pedido { v_salesdocument } criado com sucesso!| TYPE 'S'.
