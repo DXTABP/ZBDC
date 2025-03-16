@@ -1,0 +1,91 @@
+TABLES vbak.
+
+TYPES: BEGIN OF ty_alv,
+         vbeln  TYPE vbak-vbeln,
+         kunnr  TYPE vbak-kunnr,
+         name1  TYPE kna1-name1,
+         audat  TYPE vbak-audat,
+         matnr  TYPE vbap-matnr,
+         maktg  TYPE makt-maktg,
+         kwmeng TYPE vbap-kwmeng,
+         netwr  TYPE vbak-netwr,
+         lfstk  TYPE vbak-lfstk,
+       END OF ty_alv.
+
+DATA lt_alv TYPE TABLE OF ty_alv.
+
+SELECT-OPTIONS: s_vbeln FOR vbak-vbeln,
+                s_kunnr FOR vbak-kunnr,
+                s_audat FOR vbak-audat.
+
+START-OF-SELECTION.
+
+  SELECT * FROM vbak
+    INTO TABLE @DATA(lt_vbak)
+    WHERE vbeln IN @s_vbeln.
+
+  IF sy-subrc = 0.
+    SORT lt_vbak BY vbeln.
+
+    SELECT * FROM kna1
+      INTO TABLE @DATA(lt_kna1)
+      FOR ALL ENTRIES IN @lt_vbak
+      WHERE kunnr = @lt_vbak-kunnr.
+    SORT lt_kna1 BY kunnr.
+
+    SELECT * FROM vbap
+      INTO TABLE @DATA(lt_vbap)
+      FOR ALL ENTRIES IN @lt_vbak
+      WHERE vbeln = @lt_vbak-vbeln.
+    SORT lt_vbap BY vbeln.
+
+    SELECT * FROM makt
+      INTO TABLE @DATA(lt_makt)
+      FOR ALL ENTRIES IN @lt_vbap
+      WHERE matnr = @lt_vbap-matnr
+        AND spras = @sy-langu
+        AND spras = @sy-langu.
+    SORT lt_makt BY matnr.
+
+    LOOP AT lt_vbak ASSIGNING FIELD-SYMBOL(<lfs_vbak>).
+      APPEND INITIAL LINE TO lt_alv ASSIGNING FIELD-SYMBOL(<lfs_alv>).
+      <lfs_alv>-vbeln  = <lfs_vbak>-vbeln.
+      <lfs_alv>-kunnr  = <lfs_vbak>-kunnr.
+      <lfs_alv>-audat  = <lfs_vbak>-audat.
+      <lfs_alv>-netwr  = <lfs_vbak>-netwr.
+      <lfs_alv>-lfstk  = <lfs_vbak>-lfstk.
+
+      READ TABLE lt_kna1 ASSIGNING FIELD-SYMBOL(<lfs_kna1>)
+        WITH KEY kunnr = <lfs_vbak>-kunnr BINARY SEARCH.
+      IF sy-subrc = 0.
+        <lfs_alv>-name1 = <lfs_kna1>-name1.
+      ENDIF.
+
+      LOOP AT lt_vbap ASSIGNING FIELD-SYMBOL(<lfs_vbap>)
+        WHERE vbeln = <lfs_vbak>-vbeln.
+        <lfs_alv>-matnr  = <lfs_vbap>-matnr.
+        <lfs_alv>-kwmeng = <lfs_vbap>-kwmeng.
+
+        READ TABLE lt_makt ASSIGNING FIELD-SYMBOL(<lfs_makt>)
+          WITH KEY matnr = <lfs_vbap>-matnr BINARY SEARCH.
+        IF sy-subrc = 0.
+          <lfs_alv>-maktg = <lfs_makt>-maktg.
+        ENDIF.
+
+        APPEND <lfs_alv> TO lt_alv.
+      ENDLOOP.
+    ENDLOOP.
+  ENDIF.
+
+  IF lt_alv IS NOT INITIAL.
+    TRY.
+        cl_salv_table=>factory(
+          IMPORTING r_salv_table = DATA(lo_salt_table)
+          CHANGING  t_table      = lt_alv ).
+
+        lo_salt_table->get_columns( )->set_optimize( abap_true ).
+        lo_salt_table->display( ).
+      CATCH cx_salv_msg INTO DATA(lo_exception).
+        DATA(lv_mgs) = lo_exception->get_text( ).
+    ENDTRY.
+  ENDIF.
