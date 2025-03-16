@@ -1,0 +1,75 @@
+Este código ABAP é um programa que permite importar dados de um arquivo CSV para uma tabela do SAP e também exibir os dados de uma tabela em um relatório ALV.
+Ele é modular e utiliza técnicas avançadas, como field symbols, tabelas internas dinâmicas e tratamento de exceções. 
+Importação de Dados de um Arquivo CSV:
+
+O programa permite ao usuário selecionar um arquivo CSV e importar seus dados para uma tabela do SAP.
+
+O arquivo CSV é lido, processado e os dados são inseridos na tabela especificada pelo usuário.
+
+Exibição de Dados em um Relatório ALV:
+O programa permite exibir os dados de uma tabela do SAP em um relatório ALV (ABAP List Viewer).
+
+Validações e Tratamento de Erros:
+O programa valida os parâmetros de entrada e trata erros durante a execução, exibindo mensagens adequadas ao usuário.
+
+Tela de Seleção
+O programa define uma tela de seleção com os seguintes parâmetros:
+
+p_path: Caminho do arquivo CSV a ser importado.
+p_table: Nome da tabela do SAP onde os dados serão importados ou exibidos.
+p_import: Botão de rádio para selecionar a funcionalidade de importação de dados.
+p_alv: Botão de rádio para selecionar a funcionalidade de exibição de dados em ALV.
+
+Configuração Inicial:
+
+Define o nome da tabela (l_nome_tabela) e os caracteres delimitadores do CSV (l_delimita_linhas e l_separa_campos).
+
+Importação de Dados:Se o botão de rádio p_import estiver selecionado, o programa:
+
+Valida os parâmetros de entrada.
+
+Lê o arquivo CSV.
+
+Converte os dados do CSV para uma tabela interna dinâmica.
+
+Insere os dados na tabela do SAP.
+
+Exibição de Dados em ALV:
+Se o botão de rádio p_alv estiver selecionado, o programa:Seleciona os dados da tabela especificada.
+
+Exibe os dados em um relatório ALV.
+
+Subrotinas
+zf_abri_selecao_arquivo:Abre uma janela para o usuário selecionar o arquivo CSV.
+
+zf_valida_parametros_import:Valida os parâmetros de entrada para a importação de dados.
+
+zf_le_csv:Lê o arquivo CSV e armazena os dados em uma tabela interna.
+
+zf_processa_csv:Converte os dados do CSV para uma estrutura de dados compatível com a tabela do SAP.
+
+zf_insere_dados_tabela:Insere os dados convertidos na tabela do SAP.
+
+zf_exibe_tabela:Exibe os dados da tabela do SAP em um relatório ALV.
+
+Fluxo do Programa
+Importação de Dados:
+
+O usuário seleciona um arquivo CSV e especifica a tabela do SAP onde os dados serão importados.
+
+O programa lê o arquivo CSV, converte os dados e os insere na tabela do SAP.
+
+Exibição de Dados em ALV:O usuário especifica a tabela do SAP cujos dados deseja visualizar.
+
+O programa seleciona os dados da tabela e os exibe em um relatório ALV.
+Exemplo de Uso
+Importação de Dados:
+
+O usuário seleciona um arquivo CSV com os seguintes dados:
+"ID","Nome","Idade"
+"1","João","30"
+"2","Maria","25"
+O programa importa os dados para a tabela ZMINHA_TABELA.
+
+Exibição de Dados em ALV:O usuário seleciona a tabela ZMINHA_TABELA e visualiza os dados em um relatório ALV.
+
