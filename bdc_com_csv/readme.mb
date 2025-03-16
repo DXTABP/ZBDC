@@ -1,1 +1,63 @@
-mm
+O programa  é uma solução ABAP que permite a criação de Ordens de Venda (OV) no SAP a partir de um arquivo CSV. Ele utiliza a técnica BDC (Batch Data Communication) 
+para simular a transação VA01 (Criação de Ordens de Venda) de forma automatizada.
+
+2. Funcionalidades
+Carregamento de Arquivo CSV: O programa carrega um arquivo CSV contendo dados de pedidos de vendas.
+
+Validação de Dados: Valida os dados do CSV (cliente, material, organização de vendas, etc.) antes de processar.
+
+Criação de Ordens de Venda: Usa a transação VA01 via BDC para criar as ordens de venda no SAP.
+
+Log de Processamento: Gera um log detalhado com o status de cada pedido processado (sucesso ou erro).
+
+Exibição do Log: Exibe o log em formato ALV (ABAP List Viewer) para análise.
+Fluxo do Programa
+Carregamento do Arquivo CSV:
+O programa carrega o arquivo CSV usando a função GUI_UPLOAD.
+
+O arquivo deve estar no formato correto, com campos separados por ;.
+
+Processamento dos Dados:
+Para cada linha do CSV (exceto o cabeçalho):
+
+Separa os campos usando SPLIT.
+
+Formata campos com zeros à esquerda (cliente, organização de vendas, etc.).
+
+Valida os dados (cliente, material, quantidade, etc.).
+
+Prepara os dados para o BDC.
+
+Executa a transação VA01 via BDC.
+
+Registra o resultado no log.
+
+Exibição do Log:
+O log é exibido em formato ALV, mostrando o status de cada pedido processado.
+
+
+Exemplo de Uso
+Preparação do CSV:
+
+Crie um arquivo CSV no formato:
+Cliente;Data;Material;Quantidade;Valor Unitário;Org Vendas;Canal Distribuição;Setor Atividade
+1001;20231001;MAT001;10;100.50;1000;10;00
+1002;20231002;MAT002;5;200.00;1000;10;00
+
+
+
+
+1-Execute o programa Z
+
+2-Selecione o arquivo CSV.
+
+O programa processará os dados e exibirá o log em ALV.
+
+Mensagens de Erro Comuns
+Erro ao carregar o arquivo: Verifique se o arquivo está no formato correto e acessível.
+
+Cliente não existe: Verifique se o número do cliente está correto e existe na tabela KNA1.
+
+Material não existe: Verifique se o número do material está correto e existe na tabela MARA.
+
+Quantidade ou valor unitário inválido: Certifique-se de que os valores são números válidos.
