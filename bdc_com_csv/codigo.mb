@@ -1,1 +1,321 @@
-mm
+TYPE-POOLS: truxs.
+
+* Constantes para valores fixos
+CONSTANTS: gc_order_type      TYPE auart VALUE 'OP',       " Tipo de pedido
+           gc_sales_group    TYPE vkgrp VALUE '001',      " Grupo de vendedores
+           gc_sales_office   TYPE vkbur VALUE '0001',     " Escritório de vendas
+           gc_price_group    TYPE kprgbz VALUE 'D',       " Grupo de preços
+           gc_payment_terms  TYPE zterm VALUE '0004',     " Condição de pagamento
+           gc_incoterms      TYPE inco1 VALUE 'EXW',      " Incoterms
+           gc_delivery_loc   TYPE inco2_l VALUE 'piracicaba'. " Local de entrega
+
+* Estrutura para armazenar dados do CSV
+TYPES: BEGIN OF ty_dados_csv,
+         kunnr TYPE kunnr,           " Cliente
+         datum TYPE datum,           " Data do pedido
+         matnr TYPE matnr,           " Material
+         menge TYPE string,          " Quantidade
+         kbetr TYPE string,          " Valor unitário
+         vkorg TYPE vkorg,           " Organização de vendas
+         vtweg TYPE vtweg,           " Canal de distribuição
+         spart TYPE spart,           " Setor de atividade
+       END OF ty_dados_csv.
+
+* Estrutura para o log de processamento
+TYPES: BEGIN OF ty_log,
+         cliente      TYPE kunnr,    " Cliente
+         material     TYPE matnr,    " Material
+         status       TYPE char1,    " Status (S = Sucesso, E = Erro)
+         mensagem     TYPE string,   " Mensagem de retorno
+         salesorder   TYPE vbeln,    " Número da ordem de venda
+       END OF ty_log.
+
+* Tabelas e estruturas para BDC
+DATA: lt_bdcdata  TYPE TABLE OF bdcdata,
+      ls_bdcdata  TYPE bdcdata,
+      lt_messages TYPE TABLE OF bdcmsgcoll,
+      ls_options  TYPE ctu_params.
+
+* Tabelas e estruturas para dados do CSV e log
+DATA: lt_data     TYPE TABLE OF string,
+      lt_log      TYPE TABLE OF ty_log,
+      ls_log      TYPE ty_log,
+      ls_csv      TYPE ty_dados_csv,
+      lv_filename TYPE string.
+
+* Tela de seleção
+SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE TEXT-001.
+  PARAMETERS: p_file TYPE rlgrap-filename OBLIGATORY.
+  SELECTION-SCREEN COMMENT /1(79) TEXT-002.
+SELECTION-SCREEN END OF BLOCK b2.
+
+* Inicialização da tela de seleção
+INITIALIZATION.
+  TEXT-001 = 'Seleção de Arquivo'.
+  TEXT-002 = 'Selecione um arquivo CSV no formato: Cliente;Data;Material;Quantidade;Valor Unitário;Org Vendas;Canal Distribuição;Setor Atividade'.
+
+* Validação do arquivo selecionado
+AT SELECTION-SCREEN ON p_file.
+  IF p_file IS NOT INITIAL AND p_file NP '*.CSV'.
+    MESSAGE 'O arquivo deve ter extensão .CSV' TYPE 'E'.
+  ENDIF.
+
+* Abertura da janela de seleção de arquivo
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_file.
+  CALL FUNCTION 'WS_FILENAME_GET'
+    EXPORTING
+      def_filename     = p_file
+      mode             = 'O'
+      title            = 'Selecione o arquivo que deseja abrir'
+    IMPORTING
+      filename         = p_file
+    EXCEPTIONS
+      inv_winsys       = 1
+      no_batch         = 2
+      selection_cancel = 3
+      selection_error  = 4
+      OTHERS           = 5.
+
+  IF sy-subrc <> 0.
+    MESSAGE 'Erro ao selecionar o arquivo' TYPE 'E'.
+  ENDIF.
+
+* Início do processamento
+START-OF-SELECTION.
+  PERFORM f_load_file.          " Carrega o arquivo CSV
+  PERFORM f_process_data.       " Processa os dados do CSV
+  PERFORM f_display_log.        " Exibe o log de processamento
+
+*&---------------------------------------------------------------------*
+*& Form f_load_file
+*&---------------------------------------------------------------------*
+* Carrega o arquivo CSV para a tabela interna lt_data.
+*----------------------------------------------------------------------*
+FORM f_load_file.
+  lv_filename = p_file.
+
+  " Upload do arquivo CSV
+  CALL FUNCTION 'GUI_UPLOAD'
+    EXPORTING
+      filename   = lv_filename
+      filetype   = 'ASC'
+    TABLES
+      data_tab   = lt_data
+    EXCEPTIONS
+      OTHERS     = 19.
+
+  IF sy-subrc <> 0.
+    MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+      WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+  ENDIF.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form f_process_data
+*&---------------------------------------------------------------------*
+* Processa cada linha do arquivo CSV e cria ordens de venda.
+*----------------------------------------------------------------------*
+FORM f_process_data.
+  IF lt_data IS INITIAL.
+    MESSAGE 'Nenhum dado encontrado no arquivo' TYPE 'E'.
+    RETURN.
+  ENDIF.
+
+  LOOP AT lt_data INTO DATA(lv_csv).
+    IF sy-tabix <> 1.  " Ignorar cabeçalho
+      CLEAR: ls_csv, ls_log.
+      PERFORM f_split_csv USING lv_csv CHANGING ls_csv.  " Separa os campos do CSV
+      PERFORM f_format_fields CHANGING ls_csv.           " Formata campos com zeros à esquerda
+      PERFORM f_validate_data USING ls_csv.              " Valida os dados
+      IF ls_log-status IS INITIAL.
+        PERFORM f_prepare_bdc USING ls_csv.              " Prepara os dados para o BDC
+        PERFORM f_execute_bdc.                          " Executa a transação VA01
+        PERFORM f_record_log USING ls_csv.               " Registra o log
+      ENDIF.
+    ENDIF.
+  ENDLOOP.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form f_split_csv
+*&---------------------------------------------------------------------*
+* Separa os campos de uma linha do CSV e armazena na estrutura ls_csv.
+*----------------------------------------------------------------------*
+FORM f_split_csv USING p_csv TYPE string CHANGING cs_csv TYPE ty_dados_csv.
+  SPLIT p_csv AT ';' INTO cs_csv-kunnr cs_csv-datum cs_csv-matnr cs_csv-menge cs_csv-kbetr cs_csv-vkorg cs_csv-vtweg cs_csv-spart.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form f_format_fields
+*&---------------------------------------------------------------------*
+* Formata campos com zeros à esquerda.
+*----------------------------------------------------------------------*
+FORM f_format_fields CHANGING cs_csv TYPE ty_dados_csv.
+  CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+    EXPORTING
+      input  = cs_csv-kunnr
+    IMPORTING
+      output = cs_csv-kunnr.
+
+  CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+    EXPORTING
+      input  = cs_csv-vkorg
+    IMPORTING
+      output = cs_csv-vkorg.
+
+  CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+    EXPORTING
+      input  = cs_csv-vtweg
+    IMPORTING
+      output = cs_csv-vtweg.
+
+  CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+    EXPORTING
+      input  = cs_csv-spart
+    IMPORTING
+      output = cs_csv-spart.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form f_validate_data
+*&---------------------------------------------------------------------*
+* Valida os dados do CSV antes de processar a ordem de venda.
+*----------------------------------------------------------------------*
+FORM f_validate_data USING is_csv TYPE ty_dados_csv.
+  " Valida cliente
+  SELECT SINGLE kunnr INTO @DATA(lv_kunnr)
+  FROM kna1
+  WHERE kunnr = @is_csv-kunnr.
+  IF sy-subrc <> 0.
+    ls_log-status = 'E'.
+    ls_log-mensagem = 'Cliente não existe'.
+    APPEND ls_log TO lt_log.
+    RETURN.
+  ENDIF.
+
+  " Valida material
+  SELECT SINGLE matnr INTO @DATA(lv_matnr)
+  FROM mara
+  WHERE matnr = @is_csv-matnr.
+  IF sy-subrc <> 0.
+    ls_log-status = 'E'.
+    ls_log-mensagem = 'Material não existe'.
+    APPEND ls_log TO lt_log.
+    RETURN.
+  ENDIF.
+
+  " Valida quantidade e valor unitário
+  IF is_csv-menge <= 0 OR is_csv-kbetr <= 0.
+    ls_log-status = 'E'.
+    ls_log-mensagem = 'Quantidade ou valor unitário inválido'.
+    APPEND ls_log TO lt_log.
+    RETURN.
+  ENDIF.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form f_prepare_bdc
+*&---------------------------------------------------------------------*
+* Prepara os dados para o BDC com base nos dados do CSV.
+*----------------------------------------------------------------------*
+FORM f_prepare_bdc USING is_csv TYPE ty_dados_csv.
+  PERFORM f_bdc_dynpro USING 'SAPMV45A' '0101'.
+  PERFORM f_bdc_fields USING 'BDC_OKCODE' '=ENT2'.
+  PERFORM f_bdc_fields USING 'VBAK-AUART' gc_order_type.
+  PERFORM f_bdc_fields USING 'VBAK-VKORG' is_csv-vkorg.
+  PERFORM f_bdc_fields USING 'VBAK-VTWEG' is_csv-vtweg.
+  PERFORM f_bdc_fields USING 'VBAK-SPART' is_csv-spart.
+  PERFORM f_bdc_fields USING 'VBAK-VKGRP' gc_sales_group.
+  PERFORM f_bdc_fields USING 'VBAK-VKBUR' gc_sales_office.
+  PERFORM f_bdc_dynpro USING 'SAPMV45A' '4001'.
+  PERFORM f_bdc_fields USING 'BDC_OKCODE' '/00'.
+  PERFORM f_bdc_fields USING 'KUAGV-KUNNR' is_csv-kunnr.
+  PERFORM f_bdc_fields USING 'VBKD-BSTKD' is_csv-kunnr.
+  PERFORM f_bdc_fields USING 'RV45A-KPRGBZ' gc_price_group.
+  PERFORM f_bdc_fields USING 'RV45A-MABNR(01)' is_csv-matnr.
+  PERFORM f_bdc_fields USING 'RV45A-KWMENG(01)' is_csv-menge.
+  PERFORM f_bdc_fields USING 'KOMV-KBETR(01)' is_csv-kbetr.
+  PERFORM f_bdc_fields USING 'VBKD-ZTERM' gc_payment_terms.
+  PERFORM f_bdc_fields USING 'VBKD-INCO1' gc_incoterms.
+  PERFORM f_bdc_fields USING 'VBKD-INCO2_L' gc_delivery_loc.
+  PERFORM f_bdc_dynpro USING 'SAPMV45A' '4001'.
+  PERFORM f_bdc_fields USING 'BDC_OKCODE' '=SICH'.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form f_execute_bdc
+*&---------------------------------------------------------------------*
+* Executa a transação VA01 usando os dados preparados.
+*----------------------------------------------------------------------*
+FORM f_execute_bdc.
+  ls_options-dismode = 'N'.
+  ls_options-updmode = 'S'.
+
+  CALL TRANSACTION 'VA01' USING lt_bdcdata
+    OPTIONS FROM ls_options
+    MESSAGES INTO lt_messages.
+
+  IF sy-subrc = 0.
+    ls_log-status = 'S'.
+    ls_log-mensagem = 'Ordem de venda criada com sucesso'.
+  ELSE.
+    ls_log-status = 'E'.
+    ls_log-mensagem = 'Erro ao criar ordem de venda'.
+  ENDIF.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form f_record_log
+*&---------------------------------------------------------------------*
+* Registra o resultado do processamento no log.
+*----------------------------------------------------------------------*
+FORM f_record_log USING is_csv TYPE ty_dados_csv.
+  ls_log-cliente = is_csv-kunnr.
+  ls_log-material = is_csv-matnr.
+  ls_log-salesorder = lv_salesorder.
+  APPEND ls_log TO lt_log.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form f_display_log
+*&---------------------------------------------------------------------*
+* Exibe o log de processamento em ALV.
+*----------------------------------------------------------------------*
+FORM f_display_log.
+  TRY.
+      cl_salv_table=>factory(
+        IMPORTING
+          r_salv_table = DATA(lo_alv)
+        CHANGING
+          t_table      = lt_log ).
+
+      lo_alv->display( ).
+    CATCH cx_salv_msg INTO DATA(lo_exception).
+      MESSAGE lo_exception->get_text( ) TYPE 'E'.
+  ENDTRY.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form f_bdc_dynpro
+*&---------------------------------------------------------------------*
+* Preenche a estrutura do BDC com os dados da tela.
+*----------------------------------------------------------------------*
+FORM f_bdc_dynpro USING VALUE(p_program) VALUE(p_dynpro).
+  CLEAR ls_bdcdata.
+  ls_bdcdata-program = p_program.
+  ls_bdcdata-dynpro = p_dynpro.
+  ls_bdcdata-dynbegin = 'X'.
+  APPEND ls_bdcdata TO lt_bdcdata.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form f_bdc_fields
+*&---------------------------------------------------------------------*
+* Preenche a estrutura do BDC com os campos e valores.
+*----------------------------------------------------------------------*
+FORM f_bdc_fields USING VALUE(p_fnam) VALUE(p_fval).
+  CLEAR ls_bdcdata.
+  ls_bdcdata-fnam = p_fnam.
+  ls_bdcdata-fval = p_fval.
+  APPEND ls_bdcdata TO lt_bdcdata.
+ENDFORM.
