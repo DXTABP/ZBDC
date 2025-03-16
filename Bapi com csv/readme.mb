@@ -1,1 +1,99 @@
-readme
+	Este programa ABAP foi desenvolvido para automatizar a criação de pedidos de venda (Sales Orders) no SAP a partir de um arquivo CSV. 
+	  Ele utiliza a BAPI BAPI_SALESORDER_CREATEFROMDAT2 para criar os pedidos e valida os dados antes de processá-los. 
+	O programa também gera um relatório ALV com o status de cada pedido criado.
+
+O programa permite ao usuário selecionar um arquivo CSV contendo os dados dos pedidos de venda.
+
+O arquivo CSV deve ter os seguintes campos:
+
+	  cliente: Número do cliente.
+	  data_pedido: Data do pedido (não utilizado no processamento).
+	  material: Número do material.
+	  quantidade: Quantidade do material.
+	  valor_unitario: Preço unitário.
+	  organizacao_vendas: Organização de vendas.
+	  canal_distribuicao: Canal de distribuição.
+	  setor_atividade: Setor de atividade.
+  
+Validação de Dados:
+O programa valida se o cliente e o material existem no SAP antes de criar o pedido.
+Caso algum dado seja inválido, o pedido é ignorado e uma mensagem de erro é registrada no relatório.
+
+Criação de Pedidos de Venda:
+	  Utiliza a BAPI BAPI_SALESORDER_CREATEFROMDAT2 para criar os pedidos.
+Preenche automaticamente os dados do cabeçalho, itens, parceiros e agendamento.
+
+Relatório ALV:
+
+Após o processamento, o programa exibe um relatório ALV com o status de cada pedido:
+
+Sucesso (S): Pedido criado com sucesso. O número do pedido é exibido.
+
+Erro (E): Pedido não criado. A mensagem de erro é exibida.
+
+Estrutura do Código:
+Tipos e Variáveis:
+
+ty_pedidos_vendas: Estrutura para armazenar os dados lidos do CSV.
+
+ty_relatorio: Estrutura para armazenar o resultado do processamento (status, mensagem, número do pedido).
+
+Tabelas e estruturas para a BAPI (bapisdhd1, bapisditm, bapiparnr, etc.).
+
+Tela de Seleção:
+
+Permite ao usuário selecionar o arquivo CSV a ser processado.
+
+Processamento Principal:
+
+Leitura do Arquivo CSV: O arquivo é lido e convertido para uma tabela interna.
+
+Loop de Processamento: Para cada linha do CSV:
+
+Valida o cliente e o material.
+
+Preenche os dados da BAPI (cabeçalho, itens, parceiros, agendamento).
+
+Chama a BAPI para criar o pedido.
+
+Verifica mensagens de retorno e registra o status no relatório.
+
+Relatório ALV: Exibe o resultado do processamento em uma tabela ALV.
+
+Formulários:
+
+f_load_file: Realiza o upload do arquivo CSV e converte os dados para a tabela interna.  
+
+Exemplo de Arquivo CSV:
+	  cliente;data_pedido;material;quantidade;valor_unitario;organizacao_vendas;canal_distribuicao;setor_atividade
+	  1001;20231001;MAT001;10;100.50;1000;10;00
+	  1002;20231001;MAT002;5;200.75;1000;10;00
+	  1003;20231001;MAT003;20;50.00;1000;10;00
+
+
+O relatório ALV exibirá o status de cada pedido:
+
+Sucesso: Número do pedido criado.
+
+Erro: Mensagem de erro (ex: "Cliente não encontrado").
+
+
+Dependências:
+BAPI: BAPI_SALESORDER_CREATEFROMDAT2.
+
+Funções de Conversão: CONVERSION_EXIT_ALPHA_INPUT para formatar números com zeros à esquerda.
+
+ALV: cl_salv_table para exibir o relatório.
+
+
+Observações:
+Validações: Certifique-se de que os dados do CSV (clientes, materiais, etc.) existam no SAP.
+
+Erros Comuns: Verifique as mensagens de erro no relatório ALV para corrigir problemas.
+
+Customizações: Adapte o código conforme necessário para atender às regras de negócio específicas.
+
+
+caso precise de mais informações acesse:
+https://help.sap.com/docs/
+
