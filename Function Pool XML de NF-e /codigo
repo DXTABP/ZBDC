@@ -1,0 +1,329 @@
+FUNCTION-pool j_1bnfe_in_merge_xml_data_400.
+*"----------------------------------------------------------------------
+*"*"Local Interface:
+*"  IMPORTING
+*"     REFERENCE(IO_XML_NFE_IN) TYPE REF TO  CL_J_1BNFE_XML
+*"  TABLES
+*"      CT_NFLIN TYPE  J_1BNFLIN_TAB
+*"      CT_TRANSVOL TYPE  J_1BNFTRANSVOL_TAB
+*"      CT_TRAILER TYPE  J_1BNFTRAILER_TAB
+*"      CT_TRADENOTES TYPE  J_1BNFTRADENOTES_TAB
+*"      CT_REFPROC TYPE  J_1BNFREFPROC_TAB
+*"      CT_ADD_INFO TYPE  J_1BNFADD_INFO_TAB
+*"      CT_SUGARSUPPL TYPE  J_1BNFSUGARSUPPL_TAB
+*"      CT_SUGARDEDUC TYPE  J_1BNFSUGARDEDUC_TAB
+*"      CT_VEHICLE TYPE  J_1BNFVEHICLE_TAB
+*"      CT_FUEL TYPE  J_1BNFFUEL_TAB
+*"      CT_NVE TYPE  J_1BNFE_T_BADI_NVE_310
+*"      CT_NFDOC_TEXT TYPE  J_1BNFDOC_TEXT_TAB
+*"      CT_NFLIN_TEXT TYPE  J_1BNFLIN_TEXT_TAB
+*"      CT_TRACEABILITY TYPE  J_1BNFE_T_TRACE
+*"      CT_PHARMA TYPE  J_1BNFE_T_BADI_PHARMA_400
+*"      CT_PAYMENT TYPE  J_1BNFEPAYMENT_TAB
+*"  CHANGING
+*"     REFERENCE(CS_HEADER) TYPE  J_1BNFDOC
+*"----------------------------------------------------------------------
+
+* Created by note 2459713, copy from 2034541
+
+  DATA: ls_nfe_lin         TYPE j_1bnflin,
+        ls_xml_lin         TYPE j_1bnfe_s_rfc_detprod_400,
+        ls_xml_det         TYPE j_1bnfe_s_rfc_det_400,
+        ls_xml_det_nrecopi TYPE j_1bnfe_s_rfc_prodrecopi,
+        ls_xml_det_tax     TYPE j_1bnfe_s_rfc_det_tax,
+        ls_xml_tax_ipi     TYPE j_1bnfe_s_rfc_tax_ipi,
+        ls_xml_tax_issqn   TYPE j_1bnfe_s_rfc_tax_issqn,
+        ls_xml_tax_icms    TYPE j_1bnfe_s_rfc_tax_icms_400, "2701135
+        ls_xml_partner     TYPE j_1bnfe_s_rfc_partner,
+        ls_xml_payment     TYPE j_1bnfe_s_rfc_detpag_400,
+        ls_nfe_payment     TYPE j_1bnfe_s_badi_payment_400,
+        ls_nfe_vol         TYPE j_1bnftransvol,
+        ls_xml_vol         TYPE j_1bnfe_s_rfc_vol,
+        ls_xml_trailer     TYPE j_1bnfe_s_rfc_reboque,
+        ls_nfe_trailer     TYPE j_1bnftrailer,
+        ls_xml_dup         TYPE j_1bnfe_s_rfc_dup,
+        ls_nfe_dup         TYPE j_1bnftradenotes,
+        ls_xml_refproc     TYPE j_1bnfe_s_rfc_procref,
+        ls_nfe_refproc     TYPE j_1bnfrefproc,
+        ls_xml_text        TYPE j_1bnfe_s_rfc_text,
+        ls_nfe_sugar       TYPE j_1bnfsugarsuppl,
+        ls_xml_sugarfor    TYPE j_1bnfe_s_rfc_cana_fordia,
+        ls_nfe_sugarded    TYPE j_1bnfsugardeduc,
+        ls_xml_value       TYPE j_1bnfe_s_rfc_value,
+        ls_xml_trace       TYPE j_1bnfe_s_rfc_trace_400,
+        ls_nfe_trace       TYPE j_1bnfetrace,
+        ls_xml_pharma      TYPE j_1bnfe_s_rfc_prod_med_400,
+        ls_nfe_pharma      TYPE j_1bnfepharma,
+        ls_xml_veic        TYPE j_1bnfe_s_rfc_prodveic,
+        ls_nfe_veic        TYPE j_1bnfvehicle,
+        ls_nfe_fuel        TYPE j_1bnffuel,
+        ls_xml_fuel        TYPE j_1bnfe_s_rfc_prod_comb_400,
+        ls_nfe_nve         TYPE j_1bnfe_s_badi_nve_310,
+        ls_parnad          TYPE j_1binnad,
+        lv_stamp           TYPE timestamp,
+        ls_nfdoc_text      TYPE j_1bnfdoc_text,
+        ls_nflin_text      TYPE j_1bnflin_text,
+        lv_idx             TYPE sy-tabix.
+
+  FIELD-SYMBOLS: <fs_nfe_addinfo> TYPE j_1bnfadd_info. "2723172
+
+  IF io_xml_nfe_in IS BOUND.
+
+*   -- Begin -- Header Changes
+
+    " Verifica e atualiza campos do cabeçalho da nota fiscal com base nos dados do XML
+    IF cs_header-v_troco IS INITIAL.
+      cs_header-v_troco = io_xml_nfe_in->is_nfe_pag_400-v_troco.
+    ENDIF.
+
+    " Processa os pagamentos
+    IF ct_payment[] IS INITIAL.
+      LOOP AT io_xml_nfe_in->it_nfe_pag_detpag_400 INTO ls_xml_payment.
+        CLEAR ls_nfe_payment.
+        MOVE-CORRESPONDING ls_xml_payment TO ls_nfe_payment. "2641390
+        ls_nfe_payment-counter = sy-tabix.
+        APPEND ls_nfe_payment TO ct_payment.
+      ENDLOOP.
+    ENDIF.
+
+    " Atualiza data e hora de saída/entrada
+    IF cs_header-dsaient IS INITIAL AND cs_header-hsaient IS INITIAL
+      AND NOT io_xml_nfe_in->is_nfe_ide_400-dh_sai_ent IS INITIAL. "2701135
+
+      CLEAR ls_parnad.
+      CALL FUNCTION 'J_1B_NF_PARTNER_READ'
+        EXPORTING
+          partner_type           = cs_header-partyp
+          partner_id             = cs_header-parid
+          read_address           = abap_true
+        IMPORTING
+          parnad                 = ls_parnad
+        EXCEPTIONS
+          partner_not_found      = 1
+          partner_type_not_found = 2
+          OTHERS                 = 3.
+
+      IF sy-subrc = 0 AND ls_parnad-time_zone IS NOT INITIAL.
+        lv_stamp = io_xml_nfe_in->is_nfe_ide_400-dh_sai_ent. "2701135
+        CONVERT TIME STAMP lv_stamp
+           TIME ZONE ls_parnad-time_zone
+           INTO DATE cs_header-dsaient
+                TIME cs_header-hsaient.
+      ENDIF.
+    ENDIF.
+
+    " Atualiza ISUF (Inscrição Suframa)
+    IF cs_header-isuf IS INITIAL.
+      CLEAR ls_xml_partner.
+      READ TABLE io_xml_nfe_in->it_nfe_partner
+            INTO ls_xml_partner
+        WITH KEY id = io_xml_nfe_in->is_nfe_partner_ids-partner_id_emit.
+
+      IF sy-subrc = 0.
+        cs_header-isuf = ls_xml_partner-isuf.
+      ENDIF.
+    ENDIF.
+
+    " Atualiza campos de transporte
+    IF cs_header-modfrete IS INITIAL.
+      cs_header-modfrete = io_xml_nfe_in->is_nfe_transp-mod_frete.
+    ENDIF.
+
+    IF cs_header-placa IS INITIAL.
+      cs_header-placa = io_xml_nfe_in->is_nfe_transp-placa.
+    ENDIF.
+
+    IF cs_header-uf1 IS INITIAL.
+      cs_header-uf1 = io_xml_nfe_in->is_nfe_transp-uf.
+    ENDIF.
+
+    IF cs_header-rntc IS INITIAL.
+      cs_header-rntc = io_xml_nfe_in->is_nfe_transp-rntc.
+    ENDIF.
+
+    IF cs_header-vagao IS INITIAL.
+      cs_header-vagao = io_xml_nfe_in->is_nfe_transp-vagao.
+    ENDIF.
+
+    IF cs_header-balsa IS INITIAL.
+      cs_header-balsa = io_xml_nfe_in->is_nfe_transp-balsa.
+    ENDIF.
+
+    " Atualiza campos de fatura
+    IF cs_header-nfat IS INITIAL.
+      cs_header-nfat = io_xml_nfe_in->is_nfe_fat-n_fat.
+    ENDIF.
+
+    IF cs_header-vorig IS INITIAL.
+      cs_header-vorig = io_xml_nfe_in->is_nfe_fat-v_orig.
+    ENDIF.
+
+    IF cs_header-vdesc IS INITIAL.
+      cs_header-vdesc = io_xml_nfe_in->is_nfe_fat-v_desc.
+    ENDIF.
+
+    IF cs_header-vliq IS INITIAL.
+      cs_header-vliq = io_xml_nfe_in->is_nfe_fat-v_liq.
+    ENDIF.
+
+    " Processa informações adicionais do fisco
+    IF io_xml_nfe_in->is_nfe_infadic-inf_ad_fisco IS NOT INITIAL.
+      CLEAR ls_nfdoc_text.
+      READ TABLE ct_nfdoc_text INTO ls_nfdoc_text
+        WITH KEY docnum = cs_header-docnum
+                 textid = cl_j_1bnf_longtext=>gc_head_authorities.
+
+      IF sy-subrc = 0.
+        IF ls_nfdoc_text-text IS INITIAL.
+          ls_nfdoc_text-text = io_xml_nfe_in->is_nfe_infadic-inf_ad_fisco.
+          MODIFY ct_nfdoc_text FROM ls_nfdoc_text INDEX sy-tabix.
+        ENDIF.
+      ELSE.
+        ls_nfdoc_text-docnum = cs_header-docnum.
+        ls_nfdoc_text-textid = cl_j_1bnf_longtext=>gc_head_authorities.
+        ls_nfdoc_text-text   = io_xml_nfe_in->is_nfe_infadic-inf_ad_fisco.
+        APPEND ls_nfdoc_text TO ct_nfdoc_text.
+      ENDIF.
+    ENDIF.
+
+    " Processa informações complementares
+    IF io_xml_nfe_in->is_nfe_infadic-inf_cpl IS NOT INITIAL.
+      CLEAR ls_nfdoc_text.
+      READ TABLE ct_nfdoc_text INTO ls_nfdoc_text
+        WITH KEY docnum = cs_header-docnum
+                 textid = cl_j_1bnf_longtext=>gc_head_company.
+
+      IF sy-subrc = 0.
+        IF ls_nfdoc_text-text IS INITIAL.
+          ls_nfdoc_text-text = io_xml_nfe_in->is_nfe_infadic-inf_cpl.
+          MODIFY ct_nfdoc_text FROM ls_nfdoc_text INDEX sy-tabix.
+        ENDIF.
+      ELSE.
+        ls_nfdoc_text-docnum = cs_header-docnum.
+        ls_nfdoc_text-textid = cl_j_1bnf_longtext=>gc_head_company.
+        ls_nfdoc_text-text   = io_xml_nfe_in->is_nfe_infadic-inf_cpl.
+        APPEND ls_nfdoc_text TO ct_nfdoc_text.
+      ENDIF.
+    ENDIF.
+
+    " Atualiza campos de compra
+    IF cs_header-xnemp IS INITIAL.
+      cs_header-xnemp = io_xml_nfe_in->is_nfe_compra-x_nemp.
+    ENDIF.
+
+    " Atualiza campos de safra
+    IF cs_header-safra IS INITIAL.
+      cs_header-safra = io_xml_nfe_in->is_nfe_cana-safra.
+    ENDIF.
+
+    IF cs_header-ref_month_year IS INITIAL AND
+       io_xml_nfe_in->is_nfe_cana-ref IS NOT INITIAL.
+      CONCATENATE io_xml_nfe_in->is_nfe_cana-ref(2) '/'
+                  io_xml_nfe_in->is_nfe_cana-ref+2(4)
+             INTO cs_header-ref_month_year.
+    ENDIF.
+
+    IF cs_header-qtotmes IS INITIAL.
+      cs_header-qtotmes = io_xml_nfe_in->is_nfe_cana-q_tot_mes.
+    ENDIF.
+
+    IF cs_header-qtotant IS INITIAL.
+      cs_header-qtotant = io_xml_nfe_in->is_nfe_cana-q_tot_ant.
+    ENDIF.
+
+    IF cs_header-qtotger IS INITIAL.
+      cs_header-qtotger = io_xml_nfe_in->is_nfe_cana-q_tot_ger.
+    ENDIF.
+
+    IF cs_header-vfor IS INITIAL.
+      cs_header-vfor = io_xml_nfe_in->is_nfe_cana-v_for.
+    ENDIF.
+
+    IF cs_header-vtotded IS INITIAL.
+      cs_header-vtotded = io_xml_nfe_in->is_nfe_cana-v_tot_ded.
+    ENDIF.
+
+    IF cs_header-vliqfor IS INITIAL.
+      cs_header-vliqfor = io_xml_nfe_in->is_nfe_cana-v_liq_for.
+    ENDIF.
+
+    " Atualiza campos de indicadores
+    IF cs_header-ind_final IS INITIAL.
+      cs_header-ind_final = io_xml_nfe_in->is_nfe_ide_400-ind_final. "2701135
+    ENDIF.
+
+    IF cs_header-ind_pres IS INITIAL.
+      cs_header-ind_pres = io_xml_nfe_in->is_nfe_ide_400-ind_pres. "2701135
+    ENDIF.
+
+    IF cs_header-dcompet IS INITIAL.
+      cs_header-dcompet   = io_xml_nfe_in->is_nfe_issqntot_400-d_compet. "2701135
+    ENDIF.
+
+    IF cs_header-cregtrib IS INITIAL.
+      cs_header-cregtrib  = io_xml_nfe_in->is_nfe_issqntot_400-c_reg_trib. "2701135
+    ENDIF.
+
+    IF cs_header-rettransp_cmunfg IS INITIAL.
+      cs_header-rettransp_cmunfg = io_xml_nfe_in->is_nfe_transp-c_mun_fg.
+    ENDIF.
+
+    IF cs_header-natop IS INITIAL.
+      cs_header-natop = io_xml_nfe_in->is_nfe_ide_400-nat_op. "2701135
+    ENDIF.
+*   -- End -- Header Changes
+
+    " Processa volumes de transporte
+    IF ct_transvol[] IS INITIAL.
+      LOOP AT io_xml_nfe_in->it_nfe_vol INTO ls_xml_vol.
+        CLEAR ls_nfe_vol.
+        ls_nfe_vol-counter  = sy-tabix.
+        ls_nfe_vol-qvol     = ls_xml_vol-q_vol.
+        ls_nfe_vol-pesol    = ls_xml_vol-peso_l.
+        ls_nfe_vol-pesob    = ls_xml_vol-peso_b.
+        ls_nfe_vol-nvol     = ls_xml_vol-n_vol.
+        ls_nfe_vol-marca    = ls_xml_vol-marca.
+        ls_nfe_vol-esp      = ls_xml_vol-esp.
+
+        READ TABLE io_xml_nfe_in->it_nfe_text INTO ls_xml_text
+          WITH KEY id = ls_xml_vol-text_id_lacres.
+
+        IF sy-subrc = 0.
+          ls_nfe_vol-nlacre = ls_xml_text-text.
+        ENDIF.
+
+        APPEND ls_nfe_vol TO ct_transvol.
+      ENDLOOP.
+    ENDIF.
+
+    " Processa reboques
+    IF ct_trailer[] IS INITIAL.
+      LOOP AT io_xml_nfe_in->it_nfe_reboque INTO ls_xml_trailer.
+        CLEAR ls_nfe_trailer.
+        ls_nfe_trailer-counter  = sy-tabix.
+        ls_nfe_trailer-placa    = ls_xml_trailer-placa.
+        ls_nfe_trailer-rntc     = ls_xml_trailer-rntc.
+        ls_nfe_trailer-veh_uf   = ls_xml_trailer-uf.
+        APPEND ls_nfe_trailer TO ct_trailer.
+      ENDLOOP.
+    ENDIF.
+
+    " Processa duplicatas
+    IF ct_tradenotes[] IS INITIAL.
+      LOOP AT io_xml_nfe_in->it_nfe_dup INTO ls_xml_dup.
+        CLEAR ls_nfe_dup.
+        ls_nfe_dup-counter  = sy-tabix.
+        ls_nfe_dup-dvenc    = ls_xml_dup-d_venc.
+        ls_nfe_dup-ndup     = ls_xml_dup-n_dup.
+        ls_nfe_dup-vdup     = ls_xml_dup-v_dup.
+        APPEND ls_nfe_dup TO ct_tradenotes.
+      ENDLOOP.
+    ENDIF.
+
+    " Processa referências de processos
+    IF ct_refproc[] IS INITIAL.
+      LOOP AT io_xml_nfe_in->it_nfe_procref INTO ls_xml_refproc.
+        CLEAR ls_nfe_refproc.
+        ls_nfe_refproc-counter = sy-tabix.
+        ls_nfe_refproc-indproc = ls_xml_refproc-ind_proc.
+        ls_nfe_refproc-n
