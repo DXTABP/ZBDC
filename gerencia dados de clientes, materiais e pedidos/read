@@ -1,1 +1,47 @@
-.
+O programa Z_xxxxx é uma aplicação ABAP desenvolvida para gerenciar dados de clientes, materiais e pedidos. 
+Ele permite a listagem, filtragem e edição de registros nas tabelas zcli_08 (clientes), zmatrl_08 (materiais) e zped_08 (pedidos).
+
+Principais Funcionalidades:
+Listagem de Dados:
+
+Clientes: Lista os clientes com base em filtros como ID, nome, CPF, cidade e estado.
+
+Materiais: Lista os materiais com base em filtros como ID e descrição.
+
+Pedidos: Lista os pedidos com base em filtros como ID do pedido, ID do cliente, material e data do pedido.
+
+Filtros Dinâmicos:
+
+Os filtros são exibidos dinamicamente conforme a opção selecionada (clientes, materiais ou pedidos), garantindo uma interface intuitiva e organizada.
+
+Edição de Registros:
+
+Clientes: Permite a edição de dados como nome, CPF, cidade e estado.
+
+Materiais: Permite a edição da descrição do material.
+
+Pedidos: Permite a edição de informações como ID do cliente, material e data do pedido.
+
+Validação de Filtros:
+
+O programa valida se pelo menos um critério de filtro foi informado antes de executar a listagem, evitando consultas desnecessárias.
+
+Exibição em ALV:
+
+Os dados listados são exibidos em formato ALV (ABAP List Viewer), proporcionando uma visualização clara e organizada.
+
+Botões de Ação:
+Botões específicos para edição de clientes, materiais e pedidos, facilitando a navegação e a execução de ações.
+
+Fluxo de Execução:
+O usuário seleciona a opção desejada (listar clientes, materiais, pedidos ou editar cliente) e aplica os filtros necessários.
+
+O programa valida os filtros e exibe os dados correspondentes.
+
+Para edição, o usuário é direcionado para telas específicas onde pode atualizar ou excluir registros.
+
+Mensagens de Feedback:
+O programa exibe mensagens de sucesso ou erro após a execução de operações de edição ou exclusão, garantindo feedback claro ao usuário.
+Este programa é ideal para ambientes que necessitam de um gerenciamento eficiente de dados de clientes, materiais e pedidos, com funcionalidades de consulta e edição integradas.
+
+
