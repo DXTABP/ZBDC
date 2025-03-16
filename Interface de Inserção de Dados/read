@@ -1,0 +1,60 @@
+O  código Z_xxxxx é um programa ABAP desenvolvido para permitir a inserção de dados nas tabelas,
+zcli_08 (clientes), zmatrl_08 (materiais) e zped_08 (pedidos) de forma interativa, por meio de uma interface de tela de seleção. 
+Ele foi criado para facilitar o preenchimento dessas tabelas com dados fornecidos pelo usuário, garantindo validações básicas para evitar duplicidades.
+Interface de Inserção de Dados:
+
+O programa oferece uma tela de seleção dividida em três blocos:
+
+Bloco 1: Para inserção de dados de clientes (tabela zcli_08).
+Bloco 2: Para inserção de dados de pedidos (tabela zped_08).
+Bloco 3: Para inserção de dados de materiais (tabela zmatrl_08).
+
+Validação de Dados:
+
+Antes de inserir os dados nas tabelas, o programa verifica se os registros já existem:
+Para clientes, verifica se o CPF já está cadastrado.
+Para pedidos, verifica se o ID do pedido já existe.
+Para materiais, verifica se o ID do material já está cadastrado.
+
+Caso o registro já exista, o programa exibe uma mensagem de erro informando que o dado já foi cadastrado.
+
+Inserção de Dados:
+Se os dados não existirem nas tabelas, o programa insere os registros fornecidos pelo usuário.
+Após a inserção, o programa exibe uma mensagem de sucesso ou erro, dependendo do resultado da operação.
+
+Estrutura do Programa:
+O programa utiliza tabelas internas e estruturas locais para armazenar temporariamente os dados fornecidos pelo usuário antes de inseri-los nas tabelas do banco de dados.
+Os tipos de dados (TYPES) são definidos para cada tabela, garantindo que os dados sejam mapeados corretamente.
+
+Fluxo de Execução:
+O usuário preenche os campos na tela de seleção:
+
+Para clientes: ID, nome, CPF, endereço, cidade, estado, data de registro e criado por.
+Para pedidos: ID do pedido, ID do cliente, data do pedido, material, valor total, quantidade e status.
+Para materiais: ID do material, descrição, unidade de medida, preço, data de criação e criado por.
+
+O programa valida os dados:
+
+Verifica se o CPF, ID do pedido ou ID do material já existem nas tabelas correspondentes.
+
+Se os dados forem válidos, o programa insere os registros nas tabelas:
+
+zcli_08 para clientes.
+zped_08 para pedidos.
+zmatrl_08 para materiais.
+
+O programa exibe mensagens de sucesso ou erro para cada operação realizada.
+
+Mensagens de Feedback:
+Sucesso: Exibe mensagens como:
+
+"Cliente inserido com sucesso: [Nome do Cliente]".
+"Pedido inserido com sucesso: [ID do Pedido]".
+"Material inserido com sucesso: [Descrição do Material]".
+
+Erro: Exibe mensagens como:
+
+"Erro: CPF já cadastrado.".
+"Erro: Pedido já cadastrado.".
+"Erro: Material já cadastrado.".
+"Erro ao inserir cliente/pedido/material.".
