@@ -1,0 +1,54 @@
+report zxxx.
+
+" Declaração de variáveis
+DATA: lo_client  TYPE REF TO if_http_client, " Referência para o cliente HTTP
+      lc_url     TYPE string,               " String para armazenar a URL
+      lc_content TYPE string,               " String para armazenar o conteúdo da resposta
+      lt_html    TYPE TABLE OF string.       " Tabela interna para armazenar o conteúdo dividido em linhas
+
+" Define a URL da página ou API que será acessada
+lc_url = 'https://api.github.com/users'.
+
+" Cria o cliente HTTP para acessar a URL especificada
+CALL METHOD cl_http_client=>create_by_url
+  EXPORTING
+    url    = lc_url           " Passa a URL para o método
+  IMPORTING
+    client = lo_client        " Recebe a referência do cliente HTTP criado
+  EXCEPTIONS
+    OTHERS = 1.               " Captura qualquer exceção que ocorrer
+
+" Verifica se o cliente HTTP foi criado com sucesso
+IF sy-subrc <> 0.
+  " Se houve erro, exibe uma mensagem e encerra o programa
+  WRITE: / 'Error creating HTTP client'.
+  RETURN.
+ENDIF.
+
+" Configura o método da requisição HTTP como GET
+lo_client->request->set_header_field( name  = '~request_method'
+                                      value = 'GET' ).
+
+" Envia a requisição HTTP para o servidor
+lo_client->send( ).
+
+" Recebe a resposta do servidor
+CALL METHOD lo_client->receive
+  EXCEPTIONS
+    http_communication_failure = 1 " Falha na comunicação HTTP
+    http_invalid_state         = 2 " Estado inválido do cliente HTTP
+    http_processing_failed     = 3 " Falha no processamento da requisição
+    OTHERS                     = 4. " Outras exceções
+
+" Verifica se a resposta foi recebida com sucesso
+IF sy-subrc <> 0.
+  " Se houve erro, exibe uma mensagem e encerra o programa
+  WRITE: / 'Error receiving HTTP response'.
+  RETURN.
+ENDIF.
+
+" Obtém o conteúdo da resposta no formato de string
+lc_content = lo_client->response->get_cdata( ).
+
+" Divide o conteúdo da resposta em linhas e armazena na tabela interna lt_html
+SPLIT lc_content AT cl_abap_char_utilities=>cr_lf INTO TABLE lt_html.
