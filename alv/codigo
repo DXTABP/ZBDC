@@ -1,91 +1,117 @@
+* Declaração da tabela VBAK (cabeçalho de ordens de venda)
 TABLES vbak.
 
+* Definição da estrutura para exibição no ALV
 TYPES: BEGIN OF ty_alv,
-         vbeln  TYPE vbak-vbeln,
-         kunnr  TYPE vbak-kunnr,
-         name1  TYPE kna1-name1,
-         audat  TYPE vbak-audat,
-         matnr  TYPE vbap-matnr,
-         maktg  TYPE makt-maktg,
-         kwmeng TYPE vbap-kwmeng,
-         netwr  TYPE vbak-netwr,
-         lfstk  TYPE vbak-lfstk,
+         vbeln  TYPE vbak-vbeln,  " Número da ordem de venda
+         kunnr  TYPE vbak-kunnr,  " Número do cliente
+         name1  TYPE kna1-name1,  " Nome do cliente
+         audat  TYPE vbak-audat,  " Data do pedido
+         matnr  TYPE vbap-matnr,  " Número do material
+         maktg  TYPE makt-maktg,  " Descrição do material
+         kwmeng TYPE vbap-kwmeng, " Quantidade do material
+         netwr  TYPE vbak-netwr,  " Valor líquido do pedido
+         lfstk  TYPE vbak-lfstk,  " Status de entrega
        END OF ty_alv.
 
+* Tabela interna para armazenar os dados que serão exibidos no ALV
 DATA lt_alv TYPE TABLE OF ty_alv.
 
-SELECT-OPTIONS: s_vbeln FOR vbak-vbeln,
-                s_kunnr FOR vbak-kunnr,
-                s_audat FOR vbak-audat.
+* Seleções de tela para filtros
+SELECT-OPTIONS: s_vbeln FOR vbak-vbeln,  " Filtro por número da ordem de venda
+                s_kunnr FOR vbak-kunnr,  " Filtro por número do cliente
+                s_audat FOR vbak-audat.  " Filtro por data do pedido
 
+* Início do processamento
 START-OF-SELECTION.
 
+  * Consulta os dados da tabela VBAK (cabeçalho de ordens de venda)
   SELECT * FROM vbak
     INTO TABLE @DATA(lt_vbak)
     WHERE vbeln IN @s_vbeln.
 
+  * Verifica se a consulta retornou dados
   IF sy-subrc = 0.
+    * Ordena a tabela lt_vbak pelo número da ordem de venda
     SORT lt_vbak BY vbeln.
 
+    * Consulta os dados da tabela KNA1 (dados do cliente)
     SELECT * FROM kna1
       INTO TABLE @DATA(lt_kna1)
       FOR ALL ENTRIES IN @lt_vbak
       WHERE kunnr = @lt_vbak-kunnr.
+    * Ordena a tabela lt_kna1 pelo número do cliente
     SORT lt_kna1 BY kunnr.
 
+    * Consulta os dados da tabela VBAP (itens do pedido)
     SELECT * FROM vbap
       INTO TABLE @DATA(lt_vbap)
       FOR ALL ENTRIES IN @lt_vbak
       WHERE vbeln = @lt_vbak-vbeln.
+    * Ordena a tabela lt_vbap pelo número da ordem de venda
     SORT lt_vbap BY vbeln.
 
+    * Consulta os dados da tabela MAKT (descrição dos materiais)
     SELECT * FROM makt
       INTO TABLE @DATA(lt_makt)
       FOR ALL ENTRIES IN @lt_vbap
       WHERE matnr = @lt_vbap-matnr
-        AND spras = @sy-langu
-        AND spras = @sy-langu.
+        AND spras = @sy-langu.  " Filtra por idioma do sistema
+    * Ordena a tabela lt_makt pelo número do material
     SORT lt_makt BY matnr.
 
+    * Loop para processar cada ordem de venda
     LOOP AT lt_vbak ASSIGNING FIELD-SYMBOL(<lfs_vbak>).
+      * Adiciona uma nova linha à tabela lt_alv
       APPEND INITIAL LINE TO lt_alv ASSIGNING FIELD-SYMBOL(<lfs_alv>).
+      * Preenche os campos da estrutura com os dados da ordem de venda
       <lfs_alv>-vbeln  = <lfs_vbak>-vbeln.
       <lfs_alv>-kunnr  = <lfs_vbak>-kunnr.
       <lfs_alv>-audat  = <lfs_vbak>-audat.
       <lfs_alv>-netwr  = <lfs_vbak>-netwr.
       <lfs_alv>-lfstk  = <lfs_vbak>-lfstk.
 
+      * Busca o nome do cliente na tabela lt_kna1
       READ TABLE lt_kna1 ASSIGNING FIELD-SYMBOL(<lfs_kna1>)
         WITH KEY kunnr = <lfs_vbak>-kunnr BINARY SEARCH.
       IF sy-subrc = 0.
         <lfs_alv>-name1 = <lfs_kna1>-name1.
       ENDIF.
 
+      * Loop para processar os itens do pedido
       LOOP AT lt_vbap ASSIGNING FIELD-SYMBOL(<lfs_vbap>)
         WHERE vbeln = <lfs_vbak>-vbeln.
+        * Preenche os campos da estrutura com os dados do item do pedido
         <lfs_alv>-matnr  = <lfs_vbap>-matnr.
         <lfs_alv>-kwmeng = <lfs_vbap>-kwmeng.
 
+        * Busca a descrição do material na tabela lt_makt
         READ TABLE lt_makt ASSIGNING FIELD-SYMBOL(<lfs_makt>)
           WITH KEY matnr = <lfs_vbap>-matnr BINARY SEARCH.
         IF sy-subrc = 0.
           <lfs_alv>-maktg = <lfs_makt>-maktg.
         ENDIF.
 
+        * Adiciona a linha à tabela lt_alv
         APPEND <lfs_alv> TO lt_alv.
       ENDLOOP.
     ENDLOOP.
   ENDIF.
 
+  * Verifica se a tabela lt_alv contém dados para exibição
   IF lt_alv IS NOT INITIAL.
+    * Tenta exibir os dados no ALV
     TRY.
         cl_salv_table=>factory(
           IMPORTING r_salv_table = DATA(lo_salt_table)
           CHANGING  t_table      = lt_alv ).
 
+        * Otimiza as colunas do ALV para melhor visualização
         lo_salt_table->get_columns( )->set_optimize( abap_true ).
+        * Exibe o ALV
         lo_salt_table->display( ).
       CATCH cx_salv_msg INTO DATA(lo_exception).
+        * Captura e exibe mensagens de erro, se houver
         DATA(lv_mgs) = lo_exception->get_text( ).
     ENDTRY.
   ENDIF.
