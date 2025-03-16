@@ -1,0 +1,88 @@
+Este código ABAP é um exemplo de um programa que utiliza uma tela de seleção (SELECTION-SCREEN) com diversos tipos de parâmetros e controles. 
+Ele também demonstra o uso de eventos como AT SELECTION-SCREEN e AT SELECTION-SCREEN OUTPUT para manipular a tela de seleção dinamicamente.
+
+ Tela de Seleção (SELECTION-SCREEN)
+O programa define uma tela de seleção com vários blocos (BLOCK), cada um contendo diferentes tipos de parâmetros e controles:
+
+part1:Contém um parâmetro obrigatório (p_obrig) do tipo caractere com tamanho 10.
+
+part2:Contém três parâmetros (p_f1, p_f4, p_p3) do tipo caractere, com comprimentos visíveis diferentes.
+
+part3:Contém dois checkboxes (p_a e p_b), onde p_b é marcado por padrão (DEFAULT 'X').
+
+part4:Contém três botões de rádio (p_r1, p_r2, p_r3) agrupados em rad1, com p_r2 selecionado por padrão.
+
+part5:Contém três botões de rádio (p_s1, p_s2, p_s3) agrupados em rad2, com p_s3 selecionado por padrão.
+
+part6:Contém um parâmetro do tipo LISTBOX (caixa de listagem) para selecionar um valor da tabela SPFLI-CARRID, com valor padrão 'LH'.
+
+part7:Contém quatro parâmetros (test1, test2, test3, test4) com modificadores de grupo (MODIF ID sc1 e MODIF ID sc2), usados para controlar a visibilidade e o comportamento desses campos.
+
+2. Eventos da Tela de Seleção
+AT SELECTION-SCREEN ON HELP-REQUEST FOR p_f1:
+Este evento é acionado quando o usuário pressiona F1 (ajuda) no campo p_f1.
+(Exibe uma mensagem informativa: 'Você selecionou o F1!'.)
+
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_f4:
+Este evento é acionado quando o usuário pressiona F4 (ajuda de pesquisa) no campo p_f4.
+
+(Exibe uma mensagem informativa: 'Você selecionou o F4!'.)
+
+AT SELECTION-SCREEN OUTPUT:
+Este evento é acionado sempre que a tela de seleção é exibida.
+Aqui, o código percorre todos os campos da tela (LOOP AT SCREEN) e modifica dinamicamente a visibilidade e o comportamento dos campos com base nos valores dos checkboxes p_a e p_b:
+Se p_a não estiver marcado, os campos com MODIF ID sc1 são ocultados (ls_screen-active = '0').
+Se p_b não estiver marcado, os campos com MODIF ID sc2 são ocultados.
+Além disso, os campos com MODIF ID sc1 são destacados (ls_screen-intensified = '1'), enquanto os campos com MODIF ID sc2 não são destacados.
+
+3. Processamento Principal (START-OF-SELECTION)
+O programa chama a subrotina f_seleciona_dados para processar os dados inseridos na tela de seleção.
+
+4. Subrotina f_seleciona_dados
+Verificação dos Botões de Rádio:
+
+Usa uma estrutura CASE para verificar qual botão de rádio do grupo rad1 foi selecionado (p_r1, p_r2 ou p_r3).
+
+Exibe uma mensagem indicando qual botão foi selecionado.
+
+Exibição dos Parâmetros:
+
+Exibe os valores dos parâmetros p_f1, p_f4 e p_p3 na saída do programa.
+
+Funcionalidades do Código
+Tela de Seleção Dinâmica:
+
+O programa permite que o usuário insira dados em uma tela de seleção com vários tipos de controles (parâmetros, checkboxes, botões de rádio, listbox).
+
+A visibilidade e o comportamento dos campos são controlados dinamicamente com base nos valores dos checkboxes.
+
+Eventos de Ajuda (F1 e F4):
+
+O programa responde às ações do usuário (pressionar F1 ou F4) exibindo mensagens informativas.
+
+Processamento dos Dados:
+
+O programa processa os dados inseridos na tela de seleção e exibe os resultados na saída.
+
+Exemplo de Uso
+Tela de Seleção:
+
+O usuário preenche os campos na tela de seleção, como:
+
+Um valor obrigatório no campo p_obrig.
+
+Seleciona checkboxes (p_a e p_b).
+
+Escolhe um botão de rádio (p_r1, p_r2 ou p_r3).
+
+Seleciona um valor na listbox (p_carrid).
+
+Ações do Usuário:
+Se o usuário pressionar F1 no campo p_f1, verá a mensagem: 'Você selecionou o F1!'.
+Se o usuário pressionar F4 no campo p_f4, verá a mensagem: 'Você selecionou o F4!'.
+
+Processamento:
+
+Após confirmar a tela de seleção, o programa exibe:
+Qual botão de rádio foi selecionado.
+Os valores dos parâmetros p_f1, p_f4 e p_p3.
