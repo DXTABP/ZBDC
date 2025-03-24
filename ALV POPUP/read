@@ -1,1 +1,12 @@
-ddddd
+Este programa ABAP demonstra o uso da função REUSE_ALV_POPUP_TO_SELECT para exibir dados em uma janela popup interativa. 
+Veja o que ele faz:
+Funcionalidades Principais
+Seleção de Usuários:
+
+Lê dados de endereço de usuários da tabela USER_ADDR
+Exibe em uma janela popup com opção de seleção múltipla
+
+Componentes:
+Tela de seleção com parâmetro para limitar registros
+Estrutura personalizada para dados de usuários
+Função ALV popup com checkboxes.
