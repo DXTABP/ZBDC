@@ -1,0 +1,26 @@
+ Programa de manutenção (CRUD) para tabela ZADE usando ALV interativo.
+Funcionalidades:
+Consulta de dados com filtros
+Criação de novos registros
+Edição de registros existentes
+Exclusão de registros
+Validação de dados
+Log de operações
+
+Componentes principais:
+Tela de seleção com filtros
+ALV com capacidade de edição
+Controle de estilos para diferentes modos (visualização/edição)
+Tratamento de mensagens
+
+Fluxo principal:
+Seleciona dados conforme critérios
+Prepara ALV com configurações
+Exibe dados
+Gerencia ações do usuário (novo, editar, excluir, salvar)
+
+Técnicas utilizadas:
+ALV Grid com callbacks
+Controle de estilos de célula
+Operações em lote (BDC)
+Gerenciamento de logs
