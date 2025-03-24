@@ -1,0 +1,278 @@
+*&---------------------------------------------------------------------*
+*& Report Zxxxxx.
+*&---------------------------------------------------------------------*
+*&
+*& Objetivo: Exibe rotinas de formulário chamadas na manutenção de tabelas/views
+*&           Permite visualizar o formulário ao clicar duas vezes em uma linha
+*& - Otimizada a exibição ALV
+*&---------------------------------------------------------------------*
+REPORT zxxxx.
+
+*----------------------------------------------------------------------*
+* TYPES e CONSTANTS
+*----------------------------------------------------------------------*
+TYPE-POOLS: slis.           " Tipos globais ALV
+
+CONSTANTS:
+  gc_x      VALUE 'X',
+  gc_e      VALUE 'E',      " Modo de exibição de erro
+  gc_tables TYPE char1 VALUE 'T',  " Tipo Tabela
+  gc_views  TYPE char1 VALUE 'V'.  " Tipo View
+
+*----------------------------------------------------------------------*
+* Estruturas de dados
+*----------------------------------------------------------------------*
+TYPES:
+  BEGIN OF ty_object_type,
+    type  TYPE char1,
+    descr TYPE text20,
+  END OF ty_object_type.
+
+DATA:
+  gs_tvimf    TYPE tvimf,       " Rotinas de formulário
+  gt_bdcdata  TYPE TABLE OF bdcdata,  " Dados para BDC
+  gt_data     TYPE TABLE OF tvimf,    " Dados para exibição
+  gt_obj_type TYPE TABLE OF ty_object_type. " Tipos de objeto
+
+*----------------------------------------------------------------------*
+* Tela de seleção
+*----------------------------------------------------------------------*
+SELECTION-SCREEN BEGIN OF BLOCK b0 WITH FRAME TITLE TEXT-b01.
+PARAMETERS:
+  p_objtyp TYPE char1 AS LISTBOX VISIBLE LENGTH 20 DEFAULT gc_tables
+            USER-COMMAND obj_type. " Tipo de objeto (Tabela/View)
+
+SELECT-OPTIONS:
+  s_table  FOR gs_tvimf-tabname,  " Nome da tabela/view
+  s_event  FOR gs_tvimf-event,    " Evento
+  s_form   FOR gs_tvimf-formname. " Nome do formulário
+SELECTION-SCREEN END OF BLOCK b0.
+
+SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-b02.
+PARAMETERS:
+  p_max    TYPE i DEFAULT 200 OBLIGATORY. " Número máximo de registros
+SELECTION-SCREEN END OF BLOCK b1.
+
+*----------------------------------------------------------------------*
+* Inicialização
+*----------------------------------------------------------------------*
+INITIALIZATION.
+  PERFORM init_selection_screen.
+
+*----------------------------------------------------------------------*
+* Processamento principal
+*----------------------------------------------------------------------*
+START-OF-SELECTION.
+  PERFORM check_authorization.
+  PERFORM read_data.
+
+END-OF-SELECTION.
+  IF gt_data IS INITIAL.
+    MESSAGE s398(00) WITH 'Nenhum dado encontrado com os critérios selecionados'.
+  ELSE.
+    PERFORM display_data.
+  ENDIF.
+
+*&---------------------------------------------------------------------*
+*&      Form  INIT_SELECTION_SCREEN
+*&---------------------------------------------------------------------*
+*       Preenche a lista de tipos de objeto e textos da tela
+*----------------------------------------------------------------------*
+FORM init_selection_screen.
+  " Preenche lista de tipos de objeto
+  gt_obj_type = VALUE #(
+    ( type = gc_tables descr = 'Tabelas' )
+    ( type = gc_views  descr = 'Views' ) ).
+
+  CALL FUNCTION 'VRM_SET_VALUES'
+    EXPORTING
+      id     = 'P_OBJTYP'
+      values = gt_obj_type.
+
+  " Define textos da tela
+  TEXT-b01 = 'Critérios de Seleção'.
+  TEXT-b02 = 'Opções de Exibição'.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  CHECK_AUTHORIZATION
+*&---------------------------------------------------------------------*
+*       Verifica autorizações do usuário
+*----------------------------------------------------------------------*
+FORM check_authorization.
+  AUTHORITY-CHECK OBJECT 'S_TABU_NAM'
+    ID 'ACTVT' FIELD '03'
+    ID 'TABLE' FIELD 'TVIMF'.
+  IF sy-subrc <> 0.
+    MESSAGE e398(00) WITH 'Você não tem autorização para executar este programa'.
+  ENDIF.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  READ_DATA
+*----------------------------------------------------------------------*
+*       Lê os dados das rotinas de formulário
+*----------------------------------------------------------------------*
+FORM read_data.
+  SELECT * UP TO p_max ROWS
+    INTO TABLE gt_data
+    FROM tvimf AS t
+   WHERE tabname  IN s_table
+     AND event    IN s_event
+     AND formname IN s_form
+     AND EXISTS ( SELECT * FROM dd02l 
+                  WHERE tabname = t~tabname 
+                  AND ( ( p_objtyp = gc_tables AND as4local = 'A' ) OR
+                       ( p_objtyp = gc_views  AND as4local = 'V' ) ) )
+   ORDER BY PRIMARY KEY.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  DISPLAY_DATA
+*----------------------------------------------------------------------*
+*       Exibe os dados em um ALV Grid
+*----------------------------------------------------------------------*
+FORM display_data.
+  DATA:
+    lt_fieldcat TYPE slis_t_fieldcat_alv,
+    ls_layout   TYPE slis_layout_alv.
+
+  " Configura layout do ALV
+  ls_layout-zebra             = gc_x.
+  ls_layout-colwidth_optimize = gc_x.
+  ls_layout-detail_popup      = gc_x.
+
+  " Configura catálogo de campos
+  PERFORM build_field_catalog CHANGING lt_fieldcat.
+
+  " Exibe ALV
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+    EXPORTING
+      i_callback_program      = sy-repid
+      i_callback_user_command = 'USER_COMMAND'
+      is_layout               = ls_layout
+      it_fieldcat             = lt_fieldcat
+      i_save                  = 'A'
+    TABLES
+      t_outtab                = gt_data
+    EXCEPTIONS
+      program_error           = 1
+      OTHERS                  = 2.
+  IF sy-subrc <> 0.
+    MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+            WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+  ENDIF.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  BUILD_FIELD_CATALOG
+*----------------------------------------------------------------------*
+*       Constrói o catálogo de campos para o ALV
+*----------------------------------------------------------------------*
+FORM build_field_catalog CHANGING ct_fieldcat TYPE slis_t_fieldcat_alv.
+  DATA: ls_fieldcat TYPE slis_fieldcat_alv.
+
+  DEFINE add_field.
+    CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = &1.
+    ls_fieldcat-seltext_m = &2.
+    ls_fieldcat-key       = &3.
+    ls_fieldcat-outputlen = &4.
+    APPEND ls_fieldcat TO ct_fieldcat.
+  END-OF-DEFINITION.
+
+  add_field 'TABNAME'  'Tabela/View'    gc_x 20.
+  add_field 'EVENT'    'Evento'         gc_x 15.
+  add_field 'FORMNAME' 'Formulário'     ''   25.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  USER_COMMAND
+*----------------------------------------------------------------------*
+*       Trata comandos do usuário no ALV
+*----------------------------------------------------------------------*
+FORM user_command USING u_ucomm     TYPE syucomm
+                       us_selfield TYPE slis_selfield.
+  CASE u_ucomm.
+    WHEN '&IC1'.  " Duplo clique
+      PERFORM handle_double_click USING us_selfield.
+  ENDCASE.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  HANDLE_DOUBLE_CLICK
+*----------------------------------------------------------------------*
+*       Exibe o formulário quando o usuário clica duas vezes
+*----------------------------------------------------------------------*
+FORM handle_double_click USING is_selfield TYPE slis_selfield.
+  DATA: ls_data TYPE tvimf.
+
+  READ TABLE gt_data INDEX is_selfield-tabindex INTO ls_data.
+  IF sy-subrc = 0.
+    PERFORM display_form USING ls_data.
+  ENDIF.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  DISPLAY_FORM
+*----------------------------------------------------------------------*
+*       Exibe o formulário usando transação BDC
+*----------------------------------------------------------------------*
+FORM display_form USING is_data TYPE tvimf.
+  REFRESH gt_bdcdata.
+
+  " Tela inicial da view de tabela
+  PERFORM bdc_dynpro USING 'SAPMSVIM' '0050' '=SHOW'.
+  PERFORM bdc_field  USING 'VIMDYNFLDS-ELEM_GEN' gc_x.
+  PERFORM bdc_field  USING 'VIMDYNFLDS-VIEWNAME' is_data-tabname.
+
+  " Eventos
+  PERFORM bdc_dynpro USING 'SAPMSVIM' '0120' '=ADDR'.
+
+  " Localizar
+  PERFORM bdc_dynpro USING 'SAPL0SVM' '0010' '=POSI'.
+
+  " Validar
+  PERFORM bdc_dynpro USING 'SAPLSPO4' '0300' '=FURT'.
+  PERFORM bdc_field  USING 'SVALD-VALUE(01)' is_data-event.
+
+  " Exibir formulário
+  PERFORM bdc_dynpro USING 'SAPL0SVM' '0010' '=0001'.
+
+  " Executar transação SE54 (Manutenção de view de tabela)
+  CALL TRANSACTION 'SE54' USING gt_bdcdata MODE gc_e.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  BDC_DYNPRO
+*----------------------------------------------------------------------*
+*       Adiciona tela ao BDC
+*----------------------------------------------------------------------*
+FORM bdc_dynpro USING iv_program TYPE bdc_prog
+                      iv_dynpro  TYPE bdc_dynr
+                      iv_okcode  TYPE bdc_fval.
+  DATA: ls_bdcdata TYPE bdcdata.
+
+  ls_bdcdata-program  = iv_program.
+  ls_bdcdata-dynpro   = iv_dynpro.
+  ls_bdcdata-dynbegin = gc_x.
+  APPEND ls_bdcdata TO gt_bdcdata.
+
+  PERFORM bdc_field USING 'BDC_OKCODE' iv_okcode.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  BDC_FIELD
+*----------------------------------------------------------------------*
+*       Adiciona campo ao BDC
+*----------------------------------------------------------------------*
+FORM bdc_field USING iv_fnam TYPE fnam_____4
+                     iv_fval TYPE any.
+  DATA: ls_bdcdata TYPE bdcdata.
+
+  IF iv_fval IS NOT INITIAL.
+    ls_bdcdata-fnam = iv_fnam.
+    ls_bdcdata-fval = iv_fval.
+    APPEND ls_bdcdata TO gt_bdcdata.
+  ENDIF.
+ENDFORM.
