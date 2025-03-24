@@ -1,0 +1,367 @@
+*---------------------------------------------------------------------*
+* Relatório para listagem e gerenciamento de formulários SAPScript    *
+* Permite visualizar e acessar formulários com diversos critérios     *
+*---------------------------------------------------------------------*
+
+REPORT ZXXXXX.
+
+*---------------------------------------------------------------------*
+* Macro para criar linhas padronizadas na tela de seleção             *
+* Parâmetros: &1 = número do texto, &2 = nome campo, &3 = tabela      *
+*---------------------------------------------------------------------*
+DEFINE mac_line.
+  selection-screen :
+    begin of line, comment 10(20) v_&1 for field &2.
+  select-options &2 for &3.
+  selection-screen end of line.
+END-OF-DEFINITION.
+
+*---------------------------------------------------------------------*
+* Tipos globais necessários para o ALV                                *
+*---------------------------------------------------------------------*
+TYPE-POOLS slis.
+
+*---------------------------------------------------------------------*
+* Constantes utilizadas no programa                                   *
+* c_x = valor booleano verdadeiro                                     *
+* c_refresh = código do botão de atualização                          *
+*---------------------------------------------------------------------*
+CONSTANTS:
+  c_x VALUE 'X',
+  c_refresh TYPE syucomm VALUE '&REFRESH'.
+
+*---------------------------------------------------------------------*
+* Estrutura principal para armazenar dados dos formulários            *
+* Inclui campos padrão da STXH e campos adicionais                    *
+*---------------------------------------------------------------------*
+TYPES:
+  BEGIN OF ty_s_data.
+INCLUDE TYPE stxh.
+TYPES:
+    devclass TYPE tadir-devclass,  " Classe de desenvolvimento
+    tdline   TYPE tline-tdline,    " Primeira linha do texto
+    checkbox TYPE xfeld,           " Campo para seleção
+  END OF ty_s_data.
+
+*---------------------------------------------------------------------*
+* Variáveis globais do programa                                       *
+* gs_dummy_data = estrutura auxiliar para select-options              *
+* gt_data = tabela interna com os dados principais                    *
+*---------------------------------------------------------------------*
+DATA:
+  gs_dummy_data TYPE ty_s_data,
+  gt_data TYPE TABLE OF ty_s_data.
+
+*---------------------------------------------------------------------*
+* Definição da tela de seleção                                        *
+* Campos para filtrar os formulários SAPScript                        *
+*---------------------------------------------------------------------*
+SELECTION-SCREEN BEGIN OF LINE.
+SELECTION-SCREEN COMMENT 10(20) v_1 FOR FIELD s_mandt.
+SELECT-OPTIONS s_mandt FOR gs_dummy_data-mandt DEFAULT sy-mandt
+                 MATCHCODE OBJECT ddsef4clnt.
+SELECTION-SCREEN END OF LINE.
+
+mac_line 2 s_fname  gs_dummy_data-tdname.
+SELECTION-SCREEN BEGIN OF LINE.
+SELECTION-SCREEN COMMENT 10(20) v_3 FOR FIELD s_luser.
+SELECT-OPTIONS s_luser FOR gs_dummy_data-tdluser
+          MATCHCODE OBJECT user_comp.
+SELECTION-SCREEN END OF LINE.
+
+mac_line 4 s_ldate  gs_dummy_data-tdldate.
+SELECTION-SCREEN BEGIN OF LINE.
+SELECTION-SCREEN COMMENT 10(20) v_5 FOR FIELD s_fuser.
+SELECT-OPTIONS s_fuser FOR gs_dummy_data-tdfuser
+          MATCHCODE OBJECT user_comp.
+SELECTION-SCREEN END OF LINE.
+
+mac_line 6 s_fdate  gs_dummy_data-tdfdate.
+mac_line 7 s_dvclss gs_dummy_data-devclass.
+mac_line 8 s_spras  gs_dummy_data-tdspras.
+
+SELECTION-SCREEN :
+SKIP, BEGIN OF LINE, COMMENT 1(35) v_21 FOR FIELD p_string.
+PARAMETERS p_string TYPE tdtitle.
+SELECTION-SCREEN :END OF LINE,
+SKIP, BEGIN OF LINE, COMMENT 1(35) v_20 FOR FIELD p_max.
+PARAMETERS p_max(3) TYPE n DEFAULT '200' OBLIGATORY.
+SELECTION-SCREEN END OF LINE.
+
+*---------------------------------------------------------------------*
+* Inicialização do programa                                           *
+* Configura textos e valores padrão para a tela de seleção            *
+*---------------------------------------------------------------------*
+INITIALIZATION.
+  PERFORM f_initialization.
+
+*---------------------------------------------------------------------*
+* Processamento principal                                             *
+*---------------------------------------------------------------------*
+START-OF-SELECTION.
+  PERFORM f_read_data.
+
+END-OF-SELECTION.
+  PERFORM f_display_data.
+
+*---------------------------------------------------------------------*
+* Formulário F_INITIALIZATION                                         *
+* Define os textos para os rótulos da tela de seleção                 *
+* Configura valores padrão para os filtros                            *
+*---------------------------------------------------------------------*
+FORM f_initialization.
+
+  DATA:
+    ls_fname LIKE LINE OF s_fname,
+    ls_dvclss LIKE LINE OF s_dvclss.
+
+v_1 = 'Cliente'.
+v_2 = 'Nome do formulário'.
+v_3 = 'Última alteração por'.
+v_4 = 'Alterado em'.
+v_5 = 'Criado por'.
+v_6 = 'Criado em'.
+v_7 = 'Classe de desenvolvimento'.
+v_8 = 'Idioma'.
+v_20 = 'Número máximo de entradas selecionadas'.
+v_21 = 'String'.
+
+  CONCATENATE 'ICP' 'Z*' INTO ls_fname.
+  APPEND ls_fname TO s_fname.
+
+  CONCATENATE 'ICP' 'Z*' INTO ls_dvclss.
+  APPEND ls_dvclss TO s_dvclss.
+
+ENDFORM.
+
+*---------------------------------------------------------------------*
+* Formulário F_READ_DATA                                              *
+* Lê os dados dos formulários conforme os filtros informados          *
+*---------------------------------------------------------------------*
+FORM f_read_data.
+
+  DATA ls_address TYPE addr3_val.
+
+  FIELD-SYMBOLS:
+    <ls_data> TYPE ty_s_data.
+
+* Lê dados das tabelas TADIR e STXH com os critérios de seleção
+  SELECT * UP TO p_max ROWS
+         INTO CORRESPONDING FIELDS OF TABLE gt_data
+         FROM tadir AS t
+         JOIN stxh AS s
+           ON t~obj_name = s~tdname CLIENT SPECIFIED
+        WHERE pgmid = 'R3TR'
+          AND object = 'FORM'
+          AND tdobject = 'FORM'
+          AND tdid    <> 'DEF'
+          AND tdname   IN s_fname
+          AND tdluser  IN s_luser
+          AND tdfuser  IN s_fuser
+          AND tdldate  IN s_ldate
+          AND devclass IN s_dvclss
+          AND tdspras  IN s_spras
+          AND mandt    IN s_mandt.
+
+* Ordena para melhor performance na busca de endereços
+  SORT gt_data BY tdluser.
+
+* Processa cada registro encontrado
+  LOOP AT gt_data ASSIGNING <ls_data>.
+
+*   Obtém dados do usuário que modificou o formulário
+    CALL FUNCTION 'SUSR_USER_ADDRESS_READ'
+      EXPORTING
+        user_name              = <ls_data>-tdluser
+      IMPORTING
+        user_address           = ls_address
+      EXCEPTIONS
+        user_address_not_found = 1
+        OTHERS                 = 2.
+
+    IF sy-subrc = 0.
+      CONCATENATE ls_address-name_last ls_address-name_first
+             INTO <ls_data>-tdluser SEPARATED BY space.
+    ENDIF.
+
+*   Obtém dados do usuário que criou o formulário
+    CALL FUNCTION 'SUSR_USER_ADDRESS_READ'
+      EXPORTING
+        user_name              = <ls_data>-tdfuser
+      IMPORTING
+        user_address           = ls_address
+      EXCEPTIONS
+        user_address_not_found = 1
+        OTHERS                 = 2.
+
+    IF sy-subrc = 0.
+      CONCATENATE ls_address-name_last ls_address-name_first
+             INTO <ls_data>-tdfuser SEPARATED BY space.
+    ENDIF.
+
+*   Preenche a primeira linha do texto do formulário
+    PERFORM fill_firstline CHANGING <ls_data>.
+
+  ENDLOOP.
+
+ENDFORM.
+
+*---------------------------------------------------------------------*
+* Formulário F_DISPLAY_DATA                                           *
+* Exibe os dados no ALV com configurações personalizadas              *
+*---------------------------------------------------------------------*
+FORM f_display_data.
+
+* Macros para construção do ALV
+  DEFINE m_sort.
+    add 1 to ls_sort-spos.
+    ls_sort-fieldname = &1.
+    ls_sort-up = &2.
+    ls_sort-down = &3.
+    ls_sort-group = &4.
+    append ls_sort to lt_sort.
+  END-OF-DEFINITION.
+
+  DEFINE m_fieldcat.
+    add 1 to ls_fieldcat-col_pos.
+    ls_fieldcat-fieldname   = &1.
+    ls_fieldcat-ref_tabname = &2.
+    append ls_fieldcat to lt_fieldcat.
+  END-OF-DEFINITION.
+
+  DATA:
+    ls_fieldcat   TYPE slis_fieldcat_alv,
+    lt_fieldcat   TYPE slis_t_fieldcat_alv,
+    lt_sort       TYPE slis_t_sortinfo_alv,
+    ls_sort       TYPE slis_sortinfo_alv,
+    ls_layout     TYPE slis_layout_alv,
+    lt_event_exit TYPE slis_t_event_exit,
+    ls_event_exit TYPE slis_event_exit.
+
+* Configuração do layout do ALV
+  ls_layout-zebra             = c_x.
+  ls_layout-cell_merge        = c_x.
+  ls_layout-group_change_edit = c_x.
+  ls_layout-colwidth_optimize = c_x.
+  ls_layout-box_fieldname = 'CHECKBOX'.
+
+* Configura ordenação padrão
+  m_sort 'TDLDATE' ''  c_x ''.
+  m_sort 'TDLTIME' ''  c_x ''.
+
+* Configura catálogo de campos
+  m_fieldcat 'MANDT'    'STXH'.
+  m_fieldcat 'TDNAME'   'STXH'.
+  m_fieldcat 'TDSPRAS'  'STXH'.
+  m_fieldcat 'TDTITLE'  'STXH'.
+  m_fieldcat 'TDLDATE'  'STXH'.
+  m_fieldcat 'TDLTIME'  'STXH'.
+  m_fieldcat 'TDLUSER'  'STXH'.
+  m_fieldcat 'TDFUSER'  'STXH'.
+  m_fieldcat 'TDFDATE'  'STXH'.
+  m_fieldcat 'TDFTIME'  'STXH'.
+  m_fieldcat 'DEVCLASS' 'TADIR'.
+  m_fieldcat 'TDLINE'   'TLINE'.
+
+* Configura botão de refresh
+  CLEAR ls_event_exit.
+  ls_event_exit-ucomm = c_refresh.
+  ls_event_exit-after = c_x.
+  APPEND ls_event_exit TO lt_event_exit.
+
+* Exibe o ALV
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+    EXPORTING
+      i_callback_program       = sy-cprog
+      i_callback_user_command  = 'USER_COMMAND'
+      i_callback_pf_status_set = 'PF_STATUS_SET'
+      is_layout                = ls_layout
+      it_fieldcat              = lt_fieldcat
+      it_sort                  = lt_sort
+      it_event_exit            = lt_event_exit
+      i_save                   = 'A'
+    TABLES
+      t_outtab                 = gt_data.
+
+ENDFORM.
+
+*---------------------------------------------------------------------*
+* Formulário USER_COMMAND                                             *
+* Trata os comandos do usuário no ALV                                 *
+*---------------------------------------------------------------------*
+FORM user_command USING u_ucomm     TYPE syucomm
+                        us_selfield TYPE slis_selfield.
+
+  DATA:
+    l_spras(2),
+    ls_data TYPE ty_s_data.
+
+  CASE u_ucomm.
+    WHEN '&IC1'.  " Duplo clique na linha
+      READ TABLE gt_data INDEX us_selfield-tabindex INTO ls_data.
+      CHECK sy-subrc EQ 0.
+      CHECK ls_data-mandt EQ sy-mandt.
+*     Preenche parâmetros para a transação SE71
+      SET PARAMETER ID 'TXF' FIELD ls_data-tdform.
+      WRITE ls_data-tdspras TO l_spras.
+      SET PARAMETER ID 'TXL' FIELD l_spras.
+*     Abre a transação de manutenção de formulários
+      CALL TRANSACTION 'SE71'.
+    WHEN c_refresh.  " Botão de refresh
+      PERFORM f_read_data.
+      us_selfield-refresh = c_x.
+  ENDCASE.
+
+ENDFORM.
+
+*---------------------------------------------------------------------*
+* Formulário PF_STATUS_SET                                            *
+* Configura a barra de status do ALV                                  *
+*---------------------------------------------------------------------*
+FORM pf_status_set USING ut_extab TYPE slis_t_extab.
+
+* Remove o botão de refresh da lista de exclusão
+  DELETE ut_extab WHERE fcode = c_refresh.
+
+* Define o status padrão com o botão de refresh habilitado
+  SET PF-STATUS 'STANDARD_FULLSCREEN' OF PROGRAM 'SAPLKKBL'
+      EXCLUDING ut_extab.
+
+ENDFORM.
+
+*---------------------------------------------------------------------*
+* Formulário FILL_FIRSTLINE                                           *
+* Preenche a primeira linha do texto do formulário                    *
+*---------------------------------------------------------------------*
+FORM fill_firstline CHANGING us_data TYPE ty_s_data.
+
+  DATA:
+    ls_lines TYPE tline,
+    lt_lines TYPE tline_t.
+
+* Lê o conteúdo do formulário
+  CALL FUNCTION 'READ_FORM'
+    EXPORTING
+      client     = us_data-mandt
+      form       = us_data-tdform
+      language   = us_data-tdspras
+    TABLES
+      form_lines = lt_lines.
+
+* Obtém a primeira linha não vazia do texto
+  LOOP AT lt_lines INTO ls_lines WHERE NOT tdline IS INITIAL.
+    us_data-tdline = ls_lines-tdline.
+    EXIT.
+  ENDLOOP.
+
+* Se foi informado um texto de busca, procura por ele no conteúdo
+  IF NOT p_string IS INITIAL.
+    LOOP AT lt_lines INTO ls_lines WHERE NOT tdline IS INITIAL.
+      IF ls_lines-tdline CS p_string.
+        us_data-tdline = ls_lines-tdline.
+        EXIT.
+      ENDIF.
+    ENDLOOP.
+  ENDIF.
+
+ENDFORM.
