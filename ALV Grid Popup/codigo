@@ -1,0 +1,261 @@
+*& Programa exemplo com ALV Grid e 2 popups de seleção
+*& Exibe clientes em uma lista ALV Grid
+*& Quando seleciona um cliente, exibe seus pedidos em um popup
+*& Quando seleciona um pedido, exibe seus itens em outro popup
+*&---------------------------------------------------------------------*
+
+REPORT zxxxxxx.
+
+*---------------------------------------------------------------------*
+* Definição de macro para facilitar criação do field catalog
+*---------------------------------------------------------------------*
+DEFINE m_fieldcat.
+  ADD 1 TO ls_fieldcat-col_pos.        " Incrementa posição da coluna
+  ls_fieldcat-fieldname   = &1.        " Nome do campo
+  ls_fieldcat-ref_tabname = &2.        " Tabela de referência
+  APPEND ls_fieldcat TO lt_fieldcat.   " Adiciona ao catálogo
+END-OF-DEFINITION.
+
+*---------------------------------------------------------------------*
+* Constantes do programa
+*---------------------------------------------------------------------*
+CONSTANTS :
+  c_x VALUE 'X'.                       " Constante para marcação X
+
+*---------------------------------------------------------------------*
+* Tipos globais para ALV
+*---------------------------------------------------------------------*
+TYPE-POOLS: slis.
+
+*---------------------------------------------------------------------*
+* Tela de seleção
+*---------------------------------------------------------------------*
+SELECTION-SCREEN :
+  SKIP, BEGIN OF LINE,COMMENT 5(27) v_1 FOR FIELD p_max.    "#EC NEEDED
+PARAMETERS p_max(2) TYPE n DEFAULT '20' OBLIGATORY. "Núm. máximo de registros
+SELECTION-SCREEN END OF LINE.
+
+*---------------------------------------------------------------------*
+* Definição de tipos para as estruturas de dados
+*---------------------------------------------------------------------*
+TYPES:
+* Dados exibidos na lista principal (ALV Grid)
+  BEGIN OF ty_kna1,
+    kunnr TYPE kna1-kunnr,             " Número do cliente
+    name1 TYPE kna1-name1,             " Nome do cliente
+    ort01 TYPE kna1-ort01,             " Cidade do cliente
+  END OF ty_kna1,
+
+* Pedidos exibidos no primeiro popup
+  BEGIN OF ty_vbak,
+    vkorg TYPE vbak-vkorg,             " Organização de vendas
+    kunnr TYPE vbak-kunnr,             " Número do cliente
+    vbeln TYPE vbak-vbeln,             " Número do documento de vendas
+    netwr TYPE vbak-netwr,             " Valor líquido do pedido
+  END OF ty_vbak,
+
+* Itens exibidos no segundo popup
+  BEGIN OF ty_vbap,
+    posnr  TYPE vbap-posnr,            " Item do pedido
+    matnr  TYPE vbap-matnr,            " Número do material
+    arktx  TYPE vbap-arktx,            " Descrição do item
+    kwmeng TYPE vbap-kwmeng,           " Quantidade do pedido
+    netwr  TYPE vbap-netwr,            " Valor líquido do item
+  END OF ty_vbap.
+
+*---------------------------------------------------------------------*
+* Variáveis globais
+*---------------------------------------------------------------------*
+DATA :
+  gt_kna1 TYPE TABLE OF ty_kna1,       " Tabela de clientes
+  gt_vbak TYPE TABLE OF ty_vbak,       " Tabela de pedidos
+  gt_vbap TYPE TABLE OF ty_vbap.       " Tabela de itens
+
+*---------------------------------------------------------------------*
+* Inicialização
+*---------------------------------------------------------------------*
+INITIALIZATION.
+  v_1 = 'Máximo de registros a ler'.   " Texto para parâmetro
+
+*---------------------------------------------------------------------*
+* Processamento principal
+*---------------------------------------------------------------------*
+START-OF-SELECTION.
+* Lê e exibe dados de clientes
+  PERFORM f_read_data_kna1.
+  PERFORM f_display_data_kna1.
+
+*---------------------------------------------------------------------*
+*      Form  F_READ_DATA_KNA1
+*---------------------------------------------------------------------*
+* Lê dados de clientes que possuem pelo menos um pedido
+*---------------------------------------------------------------------*
+FORM f_read_data_kna1.
+  SELECT kunnr name1 ort01 INTO TABLE gt_kna1
+           FROM kna1 AS k
+             UP TO p_max ROWS
+          WHERE EXISTS
+       ( SELECT kunnr FROM vbak WHERE kunnr = k~kunnr ).
+ENDFORM.                               " F_READ_DATA_KNA1
+
+*---------------------------------------------------------------------*
+*      Form  F_DISPLAY_DATA_KNA1
+*---------------------------------------------------------------------*
+* Exibe lista principal de clientes em ALV Grid
+*---------------------------------------------------------------------*
+FORM f_display_data_kna1.
+  DATA:
+    ls_fieldcat TYPE slis_fieldcat_alv, " Estrutura de campo
+    lt_fieldcat TYPE slis_t_fieldcat_alv. " Catálogo de campos
+
+* Constrói o catálogo de campos
+  m_fieldcat 'KUNNR' 'KNA1'.           " Número do cliente
+  m_fieldcat 'NAME1' 'KNA1'.           " Nome do cliente
+  m_fieldcat 'ORT01' 'KNA1'.           " Cidade do cliente
+
+* Exibe a lista principal
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+    EXPORTING
+      i_callback_program      = sy-cprog " Programa chamador
+      i_callback_user_command = 'USER_COMMAND_KNA1' " Handler para clique
+      it_fieldcat             = lt_fieldcat " Catálogo de campos
+    TABLES
+      t_outtab                = gt_kna1. " Dados a exibir
+ENDFORM.                               " F_DISPLAY_DATA_KNA1
+
+*---------------------------------------------------------------------*
+*       FORM USER_COMMAND_KNA1
+*---------------------------------------------------------------------*
+* Handler para eventos na lista principal (clique em linha)
+*---------------------------------------------------------------------*
+FORM user_command_kna1 USING u_ucomm     TYPE sy-ucomm
+                             us_selfield TYPE slis_selfield.
+  DATA :
+    ls_kna1 TYPE ty_kna1.
+
+  CASE u_ucomm.
+    WHEN '&IC1'.                       " Clique em linha
+      READ TABLE gt_kna1 INDEX us_selfield-tabindex INTO ls_kna1.
+      CHECK sy-subrc EQ 0.
+      PERFORM f_read_data_vbak         " Lê pedidos do cliente
+        USING ls_kna1-kunnr.
+      PERFORM f_display_data_vbak.     " Exibe pedidos em popup
+  ENDCASE.
+ENDFORM.                               " USER_COMMAND_KNA1
+
+*---------------------------------------------------------------------*
+*      Form  F_READ_DATA_VBAK
+*---------------------------------------------------------------------*
+* Lê pedidos de um cliente específico
+*---------------------------------------------------------------------*
+FORM f_read_data_vbak USING u_kunnr TYPE kunnr.
+  SELECT vkorg kunnr vbeln netwr INTO TABLE gt_vbak
+    FROM vbak
+      UP TO p_max ROWS
+   WHERE kunnr = u_kunnr.
+ENDFORM.                               " F_READ_DATA_VBAK
+
+*---------------------------------------------------------------------*
+*      Form  F_DISPLAY_DATA_VBAK
+*---------------------------------------------------------------------*
+* Exibe pedidos em popup de seleção
+*---------------------------------------------------------------------*
+FORM f_display_data_vbak.
+  DATA:
+    ls_private  TYPE slis_data_caller_exit, " Dados privados
+    ls_fieldcat TYPE slis_fieldcat_alv,     " Estrutura de campo
+    lt_fieldcat TYPE slis_t_fieldcat_alv.   " Catálogo de campos
+
+* Constrói o catálogo de campos
+  m_fieldcat 'VBELN' 'VBAK'.           " Número do pedido
+  m_fieldcat 'VKORG' 'VBAK'.           " Org. de vendas
+  m_fieldcat 'KUNNR' 'VBAK'.           " Número do cliente
+  m_fieldcat 'NETWR' 'VBAK'.           " Valor líquido
+
+* Configura popup
+  ls_private-columnopt = c_x.          " Otimizar largura de colunas
+
+* Exibe pedidos em popup
+  CALL FUNCTION 'REUSE_ALV_POPUP_TO_SELECT'
+    EXPORTING
+      i_selection             = ' '     " Sem modo de seleção
+      i_tabname               = 'GT_VBAK' " Nome da tabela
+      it_fieldcat             = lt_fieldcat " Catálogo
+      is_private              = ls_private " Configurações
+      i_callback_program      = sy-cprog " Programa chamador
+      i_callback_user_command = 'USER_COMMAND_VBAK' " Handler para clique
+    TABLES
+      t_outtab                = gt_vbak. " Dados a exibir
+ENDFORM.                               " F_DISPLAY_DATA_VBAK
+
+*---------------------------------------------------------------------*
+*       FORM USER_COMMAND_VBAK
+*---------------------------------------------------------------------*
+* Handler para eventos no popup de pedidos (clique em linha)
+*---------------------------------------------------------------------*
+FORM user_command_vbak USING u_ucomm     TYPE sy-ucomm
+                             us_selfield TYPE slis_selfield.
+  DATA:
+    ls_vbak TYPE ty_vbak.
+
+  CASE u_ucomm.
+    WHEN '&ICM'.                       " Clique em linha
+      READ TABLE gt_vbak INDEX us_selfield-tabindex INTO ls_vbak.
+      CHECK sy-subrc EQ 0.
+      PERFORM f_read_data_vbap         " Lê itens do pedido
+        USING ls_vbak-vbeln.
+      PERFORM f_display_data_vbap.     " Exibe itens em popup
+  ENDCASE.
+ENDFORM.                               " USER_COMMAND_VBAK
+
+*---------------------------------------------------------------------*
+*      Form  F_READ_DATA_VBAP
+*---------------------------------------------------------------------*
+* Lê itens de um pedido específico
+*---------------------------------------------------------------------*
+FORM f_read_data_vbap USING u_vbeln TYPE vbeln_va.
+  SELECT posnr matnr arktx kwmeng netwr
+    INTO TABLE gt_vbap
+    FROM vbap
+   WHERE vbeln = u_vbeln.
+ENDFORM.                               " F_READ_DATA_VBAP
+
+*---------------------------------------------------------------------*
+*      Form  F_DISPLAY_DATA_VBAP
+*---------------------------------------------------------------------*
+* Exibe itens de pedido em popup
+*---------------------------------------------------------------------*
+FORM f_display_data_vbap.
+  TYPE-POOLS kkblo.                    " Pool de tipos para KKBLO
+
+  DATA:
+    ls_layout   TYPE kkblo_layout,     " Layout do popup
+    ls_fieldcat TYPE kkblo_fieldcat,   " Estrutura de campo
+    lt_fieldcat TYPE kkblo_t_fieldcat. " Catálogo de campos
+
+* Constrói o catálogo de campos
+  m_fieldcat 'POSNR'  'VBAP'.         " Item do pedido
+  m_fieldcat 'MATNR'  'VBAP'.         " Material
+  m_fieldcat 'ARKTX'  'VBAP'.         " Descrição
+  m_fieldcat 'KWMENG' 'VBAP'.         " Quantidade
+  m_fieldcat 'NETWR'  'VBAP'.         " Valor líquido
+
+* Configura layout do popup
+  ls_layout-colwidth_optimize = c_x.   " Otimizar largura
+  ls_layout-no_input = c_x.            " Desativar seleção
+
+* Exibe itens em popup
+  CALL FUNCTION 'K_KKB_LIST_DISPLAY'
+    EXPORTING
+      i_callback_program       = 'SAPLKKBL' " Programa padrão
+      i_callback_pf_status_set = 'LFIS_PF_STATUS_SET2' " Status
+      i_tabname                = 'GT_VBAP' " Nome da tabela
+      is_layout                = ls_layout " Layout
+      it_fieldcat              = lt_fieldcat " Catálogo
+      i_screen_start_column    = 25      " Coluna inicial
+      i_screen_start_line      = 3       " Linha inicial
+      i_screen_end_column      = 110     " Coluna final
+      i_screen_end_line        = 20      " Linha final
+    TABLES
+      t_outtab                 = gt_vbap. " Dados a exibir
+ENDFORM.                               " F_DISPLAY_DATA_VBAP
