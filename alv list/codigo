@@ -1,0 +1,229 @@
+*& Programa que exibe a transposição de uma tabela interna
+*& (transforma linhas em colunas e vice-versa)
+*&---------------------------------------------------------------------*
+
+REPORT zxxxxx.
+
+*---------------------------------------------------------------------*
+* Este relatório exibe a transposição de uma Tabela Interna           *
+*---------------------------------------------------------------------*
+
+* Pool de tipos para ALV
+TYPE-POOLS slis.
+
+* Tela de seleção
+SELECTION-SCREEN:
+BEGIN OF LINE, COMMENT 1(35) v_1 FOR FIELD p_table.         "#EC NEEDED
+PARAMETERS p_table TYPE dd03l-tabname OBLIGATORY. "Nome da tabela/view
+SELECTION-SCREEN END OF LINE.
+
+SELECTION-SCREEN:
+  SKIP, BEGIN OF LINE,COMMENT 5(27) v_2 FOR FIELD p_max.    "#EC NEEDED
+PARAMETERS p_max(2) TYPE n DEFAULT '10' OBLIGATORY. "Núm. máximo de registros
+SELECTION-SCREEN END OF LINE.
+
+* Field symbol para tabela dinâmica
+FIELD-SYMBOLS:
+  <gt_data> TYPE STANDARD TABLE.       " Dados lidos
+
+*---------------------------------------------------------------------*
+* Inicialização
+INITIALIZATION.
+* Textos para parâmetros
+  v_1 = 'Tabela ou view'.
+  v_2 = 'Máximo de registros a ler'.
+
+*---------------------------------------------------------------------*
+* Validação na tela de seleção
+AT SELECTION-SCREEN.
+* Verifica se tabela existe e é válida
+  PERFORM f_check_table.
+
+*---------------------------------------------------------------------*
+* Processamento principal
+START-OF-SELECTION.
+* Lê dados da tabela
+  PERFORM f_read_data.
+
+*---------------------------------------------------------------------*
+* Exibição dos resultados
+END-OF-SELECTION.
+* Exibe dados transpostos
+  PERFORM f_display_data.
+
+*---------------------------------------------------------------------*
+*      Form  F_READ_DATA
+*---------------------------------------------------------------------*
+* Lê dados da tabela especificada
+*---------------------------------------------------------------------*
+FORM f_read_data.
+
+  DATA:
+    lp_table TYPE REF TO data.         " Ponteiro para tabela dinâmica
+
+* Cria tabela interna dinâmica
+  CREATE DATA lp_table TYPE STANDARD TABLE OF (p_table)
+                       WITH NON-UNIQUE DEFAULT KEY.
+  ASSIGN lp_table->* TO <gt_data>.
+
+* Seleciona dados da tabela
+  SELECT * INTO CORRESPONDING FIELDS OF TABLE <gt_data>
+   UP TO p_max ROWS
+    FROM (p_table).
+
+ENDFORM.                               " F_READ_DATA
+
+*---------------------------------------------------------------------*
+*      Form  F_DISPLAY_DATA
+*---------------------------------------------------------------------*
+* Exibe os dados transpostos em um ALV
+*---------------------------------------------------------------------*
+FORM f_display_data.
+
+  DATA:
+    l_column    TYPE sy-tabix,         " Contador de colunas
+    lo_columns  TYPE REF TO cl_salv_columns_table, "Colunas do ALV
+    lo_table    TYPE REF TO cl_salv_table, "Tabela SALV
+    lp_struct   TYPE REF TO data,      "Ponteiro para estrutura
+    lp_table    TYPE REF TO data,      " Ponteiro para tabela dinâmica
+    ls_fieldcat TYPE slis_fieldcat_alv, "Catálogo de campos
+    lt_fieldcat TYPE slis_t_fieldcat_alv.  " Catálogo de campos
+
+* Declarações para RTTS (Runtime Type Services)
+  DATA:
+    lo_struct_typ   TYPE REF TO cl_abap_datadescr, "Tipo estrutura
+    lo_dyntable_typ TYPE REF TO cl_abap_tabledescr, "Tipo tabela
+    ls_component    TYPE cl_abap_structdescr=>component, "Componente
+    lt_component    TYPE cl_abap_structdescr=>component_table. "Tabela de componentes
+
+* Field symbols para manipulação dinâmica
+  FIELD-SYMBOLS:
+    <ls_header>    TYPE any,           "Cabeçalho
+    <field_header> TYPE any,           "Campo cabeçalho
+    <field_data>   TYPE any,           "Campo dados
+    <ls_data>      TYPE any,           "Linha de dados
+    <lt_data>      TYPE STANDARD TABLE. " Tabela para exibição
+
+* Cria estrutura dinâmica para tabela transposta
+  CLEAR ls_component.
+  ls_component-name = 'COLUMNTEXT'. "Coluna para textos
+  ls_component-type ?= cl_abap_elemdescr=>describe_by_name( 'LVC_TEXT' ).
+  APPEND ls_component TO lt_component.
+
+* Adiciona colunas dinâmicas para os valores
+  DESCRIBE TABLE <gt_data>.
+
+  DO sy-tfill TIMES.
+    CLEAR ls_component.
+    ls_component-name = sy-index.
+    ls_component-name = 'VALUE' && ls_component-name. "Nome dinâmico
+    CONDENSE ls_component-name NO-GAPS.
+    ls_component-type ?= cl_abap_elemdescr=>describe_by_name( 'LVC_VALUE' ).
+    APPEND ls_component TO lt_component.
+  ENDDO.
+
+* Cria tipos dinâmicos
+  lo_struct_typ  ?= cl_abap_structdescr=>create( p_components = lt_component ).
+  lo_dyntable_typ = cl_abap_tabledescr=>create( p_line_type = lo_struct_typ ).
+
+* Cria tabela dinâmica
+  CREATE DATA lp_table TYPE HANDLE lo_dyntable_typ.
+  ASSIGN lp_table->* TO <lt_data>.
+
+* Cria estrutura para linha da tabela
+  CREATE DATA lp_struct LIKE LINE OF <lt_data>.
+  ASSIGN lp_struct->* TO <ls_header>.
+
+* Cria estrutura para linha dos dados originais
+  CREATE DATA lp_struct LIKE LINE OF <gt_data>.
+  ASSIGN lp_struct->* TO <ls_data>.
+
+* Obtém catálogo de campos da tabela original
+  CALL FUNCTION 'REUSE_ALV_FIELDCATALOG_MERGE'
+    EXPORTING
+      i_structure_name       = p_table
+    CHANGING
+      ct_fieldcat            = lt_fieldcat
+    EXCEPTIONS
+      inconsistent_interface = 1
+      program_error          = 2
+      OTHERS                 = 3.
+  IF sy-subrc <> 0.
+    MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+          WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+  ENDIF.
+
+  DESCRIBE TABLE lt_fieldcat.
+
+* Preenche a tabela transposta
+  DO sy-tfill TIMES.
+*   Para cada campo da tabela original
+    ASSIGN COMPONENT 1 OF STRUCTURE <ls_header> TO <field_header>.
+    IF sy-subrc NE 0. EXIT .ENDIF.
+    READ TABLE lt_fieldcat INTO ls_fieldcat INDEX sy-index.
+*   Preenche a primeira coluna (nome do campo)
+    <field_header> = ls_fieldcat-seltext_m. "Usa texto médio
+    IF <field_header> IS INITIAL.
+      <field_header> = ls_fieldcat-fieldname. "Ou nome do campo
+    ENDIF.
+
+*   Preenche os valores para cada linha
+    LOOP AT <gt_data> INTO <ls_data>.
+      l_column = sy-tabix + 1. "Coluna atual (+1 pois a 1ª é o nome)
+      ASSIGN COMPONENT sy-index OF STRUCTURE <ls_data> TO <field_data>.
+      IF sy-subrc NE 0. EXIT .ENDIF.
+      ASSIGN COMPONENT l_column OF STRUCTURE <ls_header> TO <field_header>.
+      IF sy-subrc NE 0. EXIT .ENDIF.
+      WRITE <field_data> TO <field_header> LEFT-JUSTIFIED. "Formata valor
+    ENDLOOP.
+    APPEND <ls_header> TO <lt_data>. "Adiciona linha à tabela
+  ENDDO.
+
+* Cria e exibe ALV
+  TRY.
+*     Cria instância do ALV
+      cl_salv_table=>factory( IMPORTING r_salv_table = lo_table
+                               CHANGING t_table      = <lt_data> ).
+    CATCH cx_salv_msg.
+  ENDTRY.
+
+* Configura colunas
+  lo_columns = lo_table->get_columns( ).
+  lo_columns->set_optimize( abap_true ). "Otimiza largura
+  lo_columns->set_headers_visible( abap_false ). "Oculta cabeçalhos
+
+* Exibe tabela
+  lo_table->display( ).
+
+ENDFORM.                               " F_DISPLAY_DATA
+
+*---------------------------------------------------------------------*
+*      Form  F_CHECK_TABLE
+*---------------------------------------------------------------------*
+* Verifica se a tabela existe e é válida
+*---------------------------------------------------------------------*
+FORM f_check_table.
+
+  DATA:
+    l_tabclass  TYPE tabclass,            " Categoria da tabela
+    l_viewclass TYPE viewclass.           " Tipo de view
+
+* Lê categoria da tabela
+  SELECT SINGLE tabclass viewclass
+    INTO (l_tabclass, l_viewclass)
+    FROM dd02l
+   WHERE tabname  = p_table
+     AND as4local = 'A' "Ativa
+     AND as4vers  = '0000'. "Versão
+  IF sy-subrc NE 0.
+*   Tabela & não está ativa no Dicionário
+    MESSAGE e402(mo) WITH p_table.
+  ELSEIF l_tabclass = 'INTTAB'.
+*   & é uma estrutura, não uma tabela
+    MESSAGE e403(mo) WITH p_table.
+  ELSEIF l_tabclass = 'VIEW' AND l_viewclass NE 'D'.
+*   Só pode usar views do tipo "Maintenance view"
+    MESSAGE e309(sv).
+  ENDIF.
+
+ENDFORM.                               " F_CHECK_TABLE
