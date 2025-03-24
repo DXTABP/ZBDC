@@ -1,1 +1,48 @@
-ee
+Este programa tem como finalidade principal exibir e gerenciar rotinas de formulário (forms) que são chamadas durante a manutenção estendida de tabelas e views no SAP.
+O programa permite:
+
+Pesquisar formulários por tabela/view, evento ou nome do formulário
+Visualizar em formato ALV a lista de formulários cadastrados
+Acessar diretamente o formulário com duplo clique na linha correspondente
+Filtrar por tipo de objeto (tabela ou view)
+
+
+Componentes Principais
+Tela de seleção: Permite filtrar os dados por diversos critérios
+Processamento: Leitura dos dados da tabela TVIMF (Forms de manutenção de tabelas/views)
+Exibição: Apresentação dos resultados em ALV Grid interativo
+  BDC (Batch Input): Mecanismo para abrir o formulário diretamente
+
+   Fluxo Lógico:
+O usuário informa os critérios de seleção na tela
+O sistema valida as autorizações do usuário
+Os dados são lidos da tabela TVIMF com os filtros aplicados
+Os resultados são exibidos em ALV Grid
+Com duplo clique, o usuário pode acessar diretamente o formulário
+
+A saída principal é uma lista ALV contendo:
+Nome da tabela/view
+Evento associado
+Nome do formulário
+
+Com a funcionalidade de:
+Ordenação por qualquer coluna
+Filtros dinâmicos
+Duplo clique para acesso direto ao formulário
+
+Acesso Rápido ao Formulário Quando o usuário clica duas vezes em uma linha:
+O sistema prepara uma sessão BDC (Batch Input)
+Navega automaticamente até a transação SE54
+Posiciona na tela correta e executa o formulário selecionado
+
+Filtro por Tipo de Objeto.
+O programa diferencia entre:
+Tabelas (AS4LOCAL = 'A')
+Views (AS4LOCAL = 'V')
+
+Tratamento de Erros o programa inclui:
+
+Verificação de autorização (objeto S_TABU_NAM)
+Mensagem quando nenhum dado é encontrado
+Tratamento de erros na exibição ALV
+Validação de entrada de dados
