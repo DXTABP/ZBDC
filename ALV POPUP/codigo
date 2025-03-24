@@ -1,0 +1,120 @@
+
+*& Programa que demonstra o uso da função REUSE_ALV_POPUP_TO_SELECT
+*& para exibir dados em um popup ALV com checkboxes para seleção
+*&---------------------------------------------------------------------*
+
+REPORT z_reuse_alv_popup_to_select.
+*---------------------------------------------------------------------*
+* Exemplo usando a função module REUSE_ALV_POPUP_TO_SELECT             *
+*---------------------------------------------------------------------*
+* Autor :                                                             *
+*---------------------------------------------------------------------*
+
+* Tela de seleção
+SELECTION-SCREEN :
+  SKIP, BEGIN OF LINE,COMMENT 5(27) v_1 FOR FIELD p_max.    "#EC NEEDED
+PARAMETERS p_max(2) TYPE n DEFAULT '20' OBLIGATORY.  " Número máximo de registros a exibir
+SELECTION-SCREEN END OF LINE.
+
+*---------------------------------------------------------------------*
+* Definição de tipos para dados de endereço do usuário
+TYPES:
+  BEGIN OF ty_user_addr,
+    bname      TYPE user_addr-bname,        " Nome do usuário
+    name_first TYPE user_addr-name_first,   " Primeiro nome
+    name_last  TYPE user_addr-name_last,    " Sobrenome
+    checkbox,                              " Campo checkbox para seleção
+  END OF ty_user_addr.
+*---------------------------------------------------------------------*
+
+* Declarações de dados globais
+DATA:
+* Tabela interna para armazenar dados dos usuários
+  gt_user TYPE TABLE OF ty_user_addr.
+
+*---------------------------------------------------------------------*
+* Evento de inicialização
+INITIALIZATION.
+* Configura o texto para o parâmetro na tela de seleção
+  v_1 = 'Número máximo de registros'.
+
+*---------------------------------------------------------------------*
+* Evento de início do processamento
+START-OF-SELECTION.
+* Lê dados do banco de dados
+  PERFORM f_read_data.
+* Exibe dados no popup ALV
+  PERFORM f_display_data.
+
+*---------------------------------------------------------------------*
+*      Form  f_read_data
+*---------------------------------------------------------------------*
+* Lê dados de endereço dos usuários do banco de dados                *
+*---------------------------------------------------------------------*
+FORM f_read_data.
+* Lê dados da tabela user_addr
+  SELECT bname name_first name_last
+      UP TO p_max ROWS  " Limita o número de registros conforme parâmetro
+    INTO CORRESPONDING FIELDS OF TABLE gt_user
+    FROM user_addr.
+
+ENDFORM.                               " F_READ_DATA
+
+*---------------------------------------------------------------------*
+*      Form  f_display_data
+*---------------------------------------------------------------------*
+* Exibe os dados em um popup ALV com checkboxes de seleção            *
+*---------------------------------------------------------------------*
+FORM f_display_data.
+* Definição de macro para construir o catálogo de campos
+* Simplifica o processo de adicionar campos ao catálogo
+  DEFINE m_fieldcat.
+    add 1 to ls_fieldcat-col_pos.          " Incrementa posição da coluna
+    ls_fieldcat-fieldname   = &1.          " Define nome do campo
+    ls_fieldcat-ref_tabname = &2.          " Define tabela de referência
+    append ls_fieldcat to lt_fieldcat.     " Adiciona ao catálogo
+  END-OF-DEFINITION.
+
+* Inclui pool de tipos do ALV
+  TYPE-POOLS: slis.                    " Tipos globais do ALV
+
+* Declarações de dados locais
+  DATA:
+    l_exit,                           " Flag para verificar se usuário saiu sem selecionar
+    ls_private  TYPE slis_data_caller_exit,  " Dados privados para ALV
+    ls_user     TYPE ty_user_addr,     " Área de trabalho para dados do usuário
+    ls_fieldcat TYPE slis_fieldcat_alv, " Estrutura do catálogo de campos
+    lt_fieldcat TYPE slis_t_fieldcat_alv. " Tabela do catálogo de campos
+
+* Constrói o catálogo de campos usando a macro
+  m_fieldcat 'BNAME'      'USER_ADDR'.      " Adiciona campo nome de usuário
+  m_fieldcat 'NAME_FIRST' 'USER_ADDR'.     " Adiciona campo primeiro nome
+  m_fieldcat 'NAME_LAST'  'USER_ADDR'.     " Adiciona campo sobrenome
+
+* Configura opção para otimizar largura das colunas
+  ls_private-columnopt = 'X'.
+
+* Exibe dados em um popup ALV com checkboxes de seleção
+  CALL FUNCTION 'REUSE_ALV_POPUP_TO_SELECT'
+       EXPORTING
+            i_selection          = 'X'      " Habilita modo de seleção
+            i_zebra              = 'X'      " Habilita padrão zebrado
+            it_fieldcat          = lt_fieldcat " Catálogo de campos
+            i_tabname            = 'GT_USER' " Nome da tabela interna
+            i_checkbox_fieldname = 'CHECKBOX' " Nome do campo checkbox
+            is_private           = ls_private " Dados privados
+       IMPORTING
+            e_exit               = l_exit   " Obtém flag de saída
+       TABLES
+            t_outtab             = gt_user. " Dados a exibir
+
+* Verifica se o usuário saiu sem fazer seleções
+  CHECK l_exit = space.
+
+* Processa registros selecionados (onde checkbox está marcado)
+  LOOP AT gt_user INTO ls_user WHERE checkbox = 'X'.
+* Exibe mensagem para cada usuário selecionado
+    MESSAGE i368(00) WITH ls_user-bname 'selecionado'.
+  ENDLOOP.
+
+ENDFORM.                               " F_DISPLAY_DATA
