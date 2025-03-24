@@ -1,0 +1,24 @@
+Objetivo: Transpor dados de uma tabela (transformar linhas em colunas)
+
+Funcionalidades:
+Seleção dinâmica de qualquer tabela/view do sistema
+Leitura de dados com limite configurável
+Transposição automática dos dados
+Exibição em ALV otimizado
+
+Técnicas utilizadas:
+Field Symbols para manipulação dinâmica
+RTTS (Runtime Type Services) para criar estruturas dinâmicas
+SALV (Simple ALV) para exibição
+Catálogo de campos dinâmico
+
+Fluxo principal:
+Valida tabela de entrada
+Lê dados da tabela especificada
+Transpõe os dados (campos viram linhas e registros viram colunas)
+Exibe resultado em ALV
+
+Controles:
+Verifica se tabela existe e está ativa
+Limita número de registros para evitar sobrecarga
+Formatação automática dos dados.
