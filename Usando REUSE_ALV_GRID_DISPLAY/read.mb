@@ -1,1 +1,14 @@
-read
+Este relatório ABAP foi desenvolvido para visualizar e alternar entre dados de cabeçalho e itens de documentos de vendas no SAP, proporcionando:
+Consulta integrada de documentos de venda (tabela VBAK) e seus itens (VBAP)
+Alternância dinâmica entre as visualizações de cabeçalho e detalhes dos itens
+Interface ALV interativa com botão dedicado para troca de visualização
+
+Filtros personalizáveis para refinamento dos resultados
+
+
+Tabelas Utilizadas:
+Tabela	Descrição	Relacionamento
+VBAK	Cabeçalho de documentos de venda	Tabela principal
+VBAP	Itens de documentos de venda	Relacionada por VBELN
+
+
