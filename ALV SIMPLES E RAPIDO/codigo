@@ -1,0 +1,41 @@
+*&---------------------------------------------------------------------*
+*& Relatório Zxxx
+*&---------------------------------------------------------------------*
+*& 
+*& Objetivo: Demonstrar a criação básica de um ALV (ABAP List Viewer)
+*&           para exibição de dados da tabela SFLIGHT
+*&---------------------------------------------------------------------*
+REPORT zxxxxx.
+
+*---------------------------------------------------------------------*
+* Declaração de variáveis
+*---------------------------------------------------------------------*
+DATA: 
+* Referência para o objeto principal do ALV  
+  r_table     TYPE REF TO cl_salv_table,
+  
+* Referência para as funções da toolbar (não utilizada neste exemplo)  
+  r_functions TYPE REF TO cl_salv_functions.
+
+* Tabela interna para armazenar os dados dos voos
+DATA: it_sflight TYPE TABLE OF sflight.
+
+*---------------------------------------------------------------------*
+* Início do processamento
+*---------------------------------------------------------------------*
+START-OF-SELECTION.
+
+* Seleciona todos os registros da tabela SFLIGHT (dados de voos)
+  SELECT * FROM sflight INTO TABLE it_sflight.
+
+* Cria a instância do ALV usando o método FACTORY da classe CL_SALV_TABLE
+* - IMPORTING r_salv_table: Recebe o objeto ALV criado
+* - CHANGING t_table: Passa os dados que serão exibidos  
+  CALL METHOD cl_salv_table=>factory
+    IMPORTING
+      r_salv_table = r_table
+    CHANGING
+      t_table      = it_sflight.
+
+* Exibe a tabela ALV na tela
+  CALL METHOD r_table->display.
