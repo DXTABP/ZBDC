@@ -3,7 +3,7 @@
 *& para exibir dados em um popup ALV com checkboxes para seleção
 *&---------------------------------------------------------------------*
 
-REPORT z_reuse_alv_popup_to_select.
+REPORT z_XXXX.
 *---------------------------------------------------------------------*
 * Exemplo usando a função module REUSE_ALV_POPUP_TO_SELECT             *
 *---------------------------------------------------------------------*
