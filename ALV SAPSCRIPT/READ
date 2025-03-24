@@ -1,1 +1,75 @@
-DDD
+Este programa ABAP foi desenvolvido para gerenciar e analisar formulários SAPScript no sistema SAP, proporcionando:
+
+Pesquisa avançada de formulários com múltiplos critérios de filtragem
+Visualização organizada em formato ALV (ABAP List Viewer)
+Acesso rápido à transação SE71 para edição dos formulários
+
+Análise do conteúdo textual dos formulários
+
+
+Funcionalidades Principais
+1. Pesquisa Avançada
+Permite filtrar formulários por:
+Cliente (mandante)
+Nome do formulário
+Idioma
+Usuário criador/modificador
+Datas de criação/modificação
+Classe de desenvolvimento
+Texto específico contido no formulário
+
+2. Visualização em ALV
+Apresenta os resultados em uma tabela interativa com:
+
+Ordenação por colunas
+Agrupamento de dados
+Layout zebrado para melhor legibilidade
+Botão de refresh para atualização dos dados
+
+3. Integração com SE71
+Possibilita acessar diretamente a transação de manutenção de formulários (SE71) através de duplo clique em qualquer registro.
+
+4. Análise de Conteúdo
+Exibe a primeira linha de texto de cada formulário e permite buscar por strings específicas no conteúdo.
+
+Fluxo do Processamento
+Inicialização:
+
+Configura textos e valores padrão para a tela de seleção
+
+Define filtros iniciais para formulários começando com 'Z*'
+
+Seleção de Dados:
+Consulta integrada das tabelas TADIR e STXH
+Aplica todos os filtros informados pelo usuário
+Limita o número de registros conforme parâmetro p_max
+
+Processamento Adicional:
+
+Converte IDs de usuário para nomes completos
+Extrai a primeira linha de texto de cada formulário
+Realiza busca por string específica quando informada
+
+Exibição:
+Configura e exibe o ALV com os resultados
+Disponibiliza botão de refresh e acesso à edição
+
+Estruturas de Dados Principais
+Tabelas Utilizadas
+STXH (Cabeçalhos de textos)
+TADIR (Diretório de objetos)
+TLINE (Linhas de texto)
+
+
+COMO UTILIZAR:
+Na tela de seleção, informe os critérios desejados
+
+Execute o programa (F8)
+
+Na lista ALV resultante:
+
+Utilize os filtros do ALV para refinar os resultados
+
+Dê duplo clique em qualquer linha para editar o formulário no SE71
+
+Use o botão de refresh para recarregar os dados.
