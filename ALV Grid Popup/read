@@ -1,0 +1,50 @@
+Este programa ABAP demonstra uma hierarquia de informações de vendas usando ALV Grid e popups. 
+Ele possui três níveis de dados:
+
+Funcionalidades Principais
+Primeiro Nível (ALV Grid Principal)
+
+Exibe lista de clientes (tabela KNA1)
+Mostra número do cliente, nome e cidade
+Limite de registros configurável via parâmetro P_MAX
+Segundo Nível (Primeiro Popup)
+
+Ao selecionar um cliente, exibe seus pedidos de venda (tabela VBAK)
+
+Mostra organização de vendas, número do pedido e valor líquido
+Terceiro Nível (Segundo Popup)
+Ao selecionar um pedido, exibe seus itens (tabela VBAP)
+Mostra posição, material, descrição, quantidade e valor
+
+Fluxo do Programa
+Inicialização:
+Define parâmetro para limite de registros
+Carrega dados de clientes com pelo menos um pedido
+
+
+Exibição Hierárquica:
+Tela principal com ALV Grid de clientes
+Popup 1: Pedidos do cliente selecionado
+Popup 2: Itens do pedido selecionado
+
+Técnicas Utilizadas:
+ALV Grid para exibição principal
+REUSE_ALV_POPUP_TO_SELECT para popup de pedidos
+K_KKB_LIST_DISPLAY para popup de itens
+Field Catalogs dinâmicos para definição de colunas
+
+
+
+
+Como Funciona:
+O usuário informa o número máximo de registros
+
+O sistema carrega clientes com pedidos
+
+Ao clicar em um cliente:
+Abre popup com seus pedidos
+
+Ao clicar em um pedido:
+Abre popup com seus itens
+
+
