@@ -1,1 +1,45 @@
-ddd
+Este é um programa ABAP extremamente simples que demonstra o uso básico do ALV (ABAP List Viewer) para exibir dados de forma tabular. 
+Vamos detalhar seu funcionamento:
+
+O que o programa faz?
+Consulta dados: Seleciona todos os registros da tabela SFLIGHT (que contém informações sobre voos) e armazena em uma tabela interna.
+
+Cria e exibe ALV: Utiliza a classe CL_SALV_TABLE para:
+Criar uma instância do ALV
+(Passar os dados consultados Exibir os dados em formato de tabela interativa)
+
+
+
+DATA: r_table     TYPE REF TO cl_salv_table,
+      r_functions TYPE REF TO cl_salv_functions.
+
+Declara variáveis de referência para:
+r_table: Objeto principal do ALV
+r_functions: Objeto para gerenciar funções da toolbar 
+
+
+DATA: it_sflight TYPE TABLE OF sflight.
+(Declara tabela interna para armazenar os dados dos voos)
+
+
+START-OF-SELECTION.
+(Início do processamento principal)
+
+
+SELECT * FROM sflight INTO TABLE it_sflight.
+(Consulta SQL que busca todos os registros da tabela SFLIGHT)
+
+
+CALL METHOD cl_salv_table=>factory
+  IMPORTING
+    r_salv_table = r_table
+  CHANGING
+    t_table      = it_sflight.
+(Método factory que cria a instância do ALV e associa os dados)
+
+
+CALL METHOD r_table->display.
+(Exibe a tabela ALV na tela)
+
+
+
