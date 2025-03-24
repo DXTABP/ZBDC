@@ -1,0 +1,354 @@
+
+REPORT zxxxxx.
+
+*---------------------------------------------------------------------*
+* Declarações gerais
+*---------------------------------------------------------------------*
+TYPE-POOLS: slis. " Tipos globais para ALV
+
+* Constantes
+CONSTANTS:
+  gc_x           VALUE 'X',           " Flag verdadeiro
+  gc_switch_btn  TYPE syucomm VALUE '&EB9'. " Código do botão de alternância
+
+* Tipos de dados
+TYPES:
+  " Estrutura para cabeçalho de documentos de venda
+  BEGIN OF ty_vbak,
+    vkorg TYPE vbak-vkorg,             " Organização de vendas
+    kunnr TYPE vbak-kunnr,             " Número do cliente
+    vbeln TYPE vbak-vbeln,             " Número do documento de venda
+    netwr TYPE vbak-netwr,             " Valor líquido
+    waerk TYPE vbak-waerk,             " Moeda
+  END OF ty_vbak,
+
+  " Estrutura para itens de documentos de venda
+  BEGIN OF ty_vbap,
+    vkorg  TYPE vbak-vkorg,            " Organização de vendas
+    kunnr  TYPE vbak-kunnr,            " Número do cliente
+    vbeln  TYPE vbak-vbeln,            " Número do documento de venda
+    posnr  TYPE vbap-posnr,            " Número do item
+    matnr  TYPE vbap-matnr,            " Número do material
+    arktx  TYPE vbap-arktx,            " Descrição do item
+    kwmeng TYPE vbap-kwmeng,           " Quantidade
+    netwr  TYPE vbap-netwr,            " Valor líquido
+    waerk  TYPE vbap-waerk,            " Moeda
+  END OF ty_vbap.
+
+* Variáveis globais
+DATA:
+  gv_switch_flag TYPE i VALUE 1,      " Flag para alternância (1=cabeçalho, -1=itens)
+
+  " Configurações ALV para cabeçalho
+  gs_layout_k    TYPE slis_layout_alv,
+  gt_fieldcat_k  TYPE slis_t_fieldcat_alv,
+  gt_sort_k      TYPE slis_t_sortinfo_alv,
+  gt_filter_k    TYPE slis_t_filter_alv,
+  gs_print_k     TYPE slis_print_alv,
+
+  " Configurações ALV para itens
+  gs_layout_p    TYPE slis_layout_alv,
+  gt_fieldcat_p  TYPE slis_t_fieldcat_alv,
+  gt_sort_p      TYPE slis_t_sortinfo_alv,
+  gt_filter_p    TYPE slis_t_filter_alv,
+  gs_print_p     TYPE slis_print_alv.
+
+ data:
+        vbak    TYPE vbak,
+  gt_vbak        TYPE TABLE OF ty_vbak, " Tabela de cabeçalhos
+  gt_vbap        TYPE TABLE OF ty_vbap. " Tabela de itens
+
+*---------------------------------------------------------------------*
+* Tela de seleção
+*---------------------------------------------------------------------*
+SELECT-OPTIONS:
+ s_vkorg FOR vbak-vkorg,              " Sales organization
+
+  s_kunnr FOR vbak-kunnr,              " Sold-to party
+  s_vbeln FOR vbak-vbeln.              " Sales document
+
+PARAMETERS:
+  p_max TYPE i DEFAULT 20 OBLIGATORY. " Limite de registros
+
+*---------------------------------------------------------------------*
+* Inicialização
+*---------------------------------------------------------------------*
+INITIALIZATION.
+  PERFORM initialization.
+
+*---------------------------------------------------------------------*
+* Processamento principal
+*---------------------------------------------------------------------*
+START-OF-SELECTION.
+  PERFORM read_sales_data.
+
+END-OF-SELECTION.
+  PERFORM display_data.
+
+*&---------------------------------------------------------------------*
+*&      Form  INITIALIZATION
+*&---------------------------------------------------------------------*
+*       Configurações iniciais do programa
+*----------------------------------------------------------------------*
+FORM initialization.
+  " Configura layout padrão para ambas as visualizações
+  gs_layout_k-zebra             = gc_x.
+  gs_layout_k-colwidth_optimize = gc_x.
+  gs_layout_k-cell_merge        = gc_x.
+  gs_layout_p = gs_layout_k.
+
+  " Configura impressão
+  gs_print_k-no_print_selinfos  = gc_x.
+  gs_print_k-no_print_listinfos = gc_x.
+  gs_print_p = gs_print_k.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  READ_SALES_DATA
+*&---------------------------------------------------------------------*
+*       Lê dados de documentos de vendas e seus itens
+*----------------------------------------------------------------------*
+FORM read_sales_data.
+  " Lê cabeçalhos de documentos de venda
+  SELECT vkorg, kunnr, vbeln, netwr, waerk
+    UP TO @p_max ROWS
+    INTO TABLE @gt_vbak
+    FROM vbak
+   WHERE vkorg IN @s_vkorg
+     AND kunnr IN @s_kunnr
+     AND vbeln IN @s_vbeln.
+
+  IF gt_vbak IS INITIAL.
+    MESSAGE 'Nenhum documento encontrado com os critérios informados' TYPE 'I'.
+    STOP.
+  ENDIF.
+
+  " Lê itens dos documentos encontrados
+  SELECT k~vkorg, k~kunnr, k~vbeln, p~posnr, p~matnr,
+         p~arktx, p~kwmeng, p~netwr, p~waerk
+    INTO CORRESPONDING FIELDS OF TABLE @gt_vbap
+    FROM vbak AS k
+    JOIN vbap AS p ON k~vbeln = p~vbeln
+    FOR ALL ENTRIES IN @gt_vbak
+   WHERE k~vbeln = @gt_vbak-vbeln.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  DISPLAY_DATA
+*&---------------------------------------------------------------------*
+*       Exibe os dados em ALV Grid com opção de alternância
+*----------------------------------------------------------------------*
+FORM display_data.
+  DATA:
+    lt_events    TYPE slis_t_event_exit,
+    lv_exit_flag TYPE c.
+
+  " Prepara catálogo de campos para cabeçalho
+  PERFORM build_field_catalog USING 'VBAK' CHANGING gt_fieldcat_k.
+
+  " Prepara catálogo de campos para itens
+  PERFORM build_field_catalog USING 'VBAP' CHANGING gt_fieldcat_p.
+
+  " Configura evento para botão de alternância
+  PERFORM prepare_switch_button CHANGING lt_events.
+
+  " Loop principal de exibição
+  lv_exit_flag = gc_x.
+  WHILE lv_exit_flag = gc_x.
+    IF gv_switch_flag = 1.
+      " Exibe cabeçalhos
+      CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+        EXPORTING
+          i_callback_program       = sy-repid
+          i_callback_user_command  = 'USER_COMMAND'
+          i_callback_pf_status_set = 'PF_STATUS_SET'
+          is_layout                = gs_layout_k
+          is_print                 = gs_print_k
+          it_fieldcat              = gt_fieldcat_k
+          it_sort                  = gt_sort_k
+          it_filter                = gt_filter_k
+          it_event_exit           = lt_events
+          i_save                  = 'A'
+        IMPORTING
+          e_exit_caused_by_caller  = lv_exit_flag
+        TABLES
+          t_outtab                 = gt_vbak.
+    ELSE.
+      " Exibe itens
+      CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+        EXPORTING
+          i_callback_program       = sy-repid
+          i_callback_user_command  = 'USER_COMMAND'
+          i_callback_pf_status_set = 'PF_STATUS_SET'
+          is_layout                = gs_layout_p
+          is_print                 = gs_print_p
+          it_fieldcat              = gt_fieldcat_p
+          it_sort                  = gt_sort_p
+          it_filter                = gt_filter_p
+          it_event_exit           = lt_events
+          i_save                  = 'A'
+        IMPORTING
+          e_exit_caused_by_caller  = lv_exit_flag
+        TABLES
+          t_outtab                 = gt_vbap.
+    ENDIF.
+
+    " Alterna o flag para próxima exibição
+    gv_switch_flag = gv_switch_flag * -1.
+  ENDWHILE.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  BUILD_FIELD_CATALOG
+*&---------------------------------------------------------------------*
+*       Constrói o catálogo de campos para o ALV
+*----------------------------------------------------------------------*
+FORM build_field_catalog USING iv_table TYPE tabname
+                         CHANGING ct_fieldcat TYPE slis_t_fieldcat_alv.
+  DATA: ls_fieldcat TYPE slis_fieldcat_alv.
+
+  " Limpa tabela de campos
+  REFRESH ct_fieldcat.
+
+  CASE iv_table.
+    WHEN 'VBAK'.
+      " Cabeçalho de documentos de venda
+      PERFORM add_field USING:
+        'VKORG' 'VBAK' 'Org.Vendas'  '' 10 CHANGING ct_fieldcat,
+        'KUNNR' 'VBAK' 'Cliente'     '' 10 CHANGING ct_fieldcat,
+        'VBELN' 'VBAK' 'Documento'   '' 10 CHANGING ct_fieldcat,
+        'NETWR' 'VBAK' 'Valor'       'X' 15 CHANGING ct_fieldcat,
+        'WAERK' 'VBAK' 'Moeda'       ''  5 CHANGING ct_fieldcat.
+
+    WHEN 'VBAP'.
+      " Itens de documentos de venda
+      PERFORM add_field USING:
+        'VKORG'  'VBAK' 'Org.Vendas' '' 10 CHANGING ct_fieldcat,
+        'KUNNR'  'VBAK' 'Cliente'    '' 10 CHANGING ct_fieldcat,
+        'VBELN'  'VBAK' 'Documento'  '' 10 CHANGING ct_fieldcat,
+        'POSNR'  'VBAP' 'Item'       ''  5 CHANGING ct_fieldcat,
+        'MATNR'  'VBAP' 'Material'   '' 15 CHANGING ct_fieldcat,
+        'ARKTX'  'VBAP' 'Descrição'  '' 30 CHANGING ct_fieldcat,
+        'KWMENG' 'VBAP' 'Quantidade' '' 10 CHANGING ct_fieldcat,
+        'NETWR'  'VBAP' 'Valor'      'X' 15 CHANGING ct_fieldcat,
+        'WAERK'  'VBAP' 'Moeda'      ''  5 CHANGING ct_fieldcat.
+  ENDCASE.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  ADD_FIELD
+*&---------------------------------------------------------------------*
+*       Adiciona um campo ao catálogo de campos do ALV
+*----------------------------------------------------------------------*
+FORM add_field USING iv_fieldname TYPE slis_fieldname
+                    iv_tabname   TYPE tabname
+                    iv_seltext   TYPE text40
+                    iv_do_sum    TYPE c
+                    iv_outputlen TYPE i
+               CHANGING ct_fieldcat TYPE slis_t_fieldcat_alv.
+  DATA: ls_fieldcat TYPE slis_fieldcat_alv.
+
+  ls_fieldcat-fieldname   = iv_fieldname.
+  ls_fieldcat-ref_tabname = iv_tabname.
+  ls_fieldcat-seltext_m   = iv_seltext.
+  ls_fieldcat-do_sum      = iv_do_sum.
+  ls_fieldcat-outputlen   = iv_outputlen.
+
+  IF iv_fieldname = 'NETWR'.
+    ls_fieldcat-cfieldname = 'WAERK'.
+    ls_fieldcat-currency   = 'WAERK'.
+  ENDIF.
+
+  APPEND ls_fieldcat TO ct_fieldcat.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  PREPARE_SWITCH_BUTTON
+*&---------------------------------------------------------------------*
+*       Prepara o evento para o botão de alternância
+*----------------------------------------------------------------------*
+FORM prepare_switch_button CHANGING ct_events TYPE slis_t_event_exit.
+  DATA: ls_event TYPE slis_event_exit.
+
+  ls_event-ucomm = gc_switch_btn.
+  ls_event-after = gc_x.
+  APPEND ls_event TO ct_events.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  USER_COMMAND
+*&---------------------------------------------------------------------*
+*       Trata comandos do usuário no ALV
+*----------------------------------------------------------------------*
+FORM user_command USING iv_ucomm     TYPE syucomm
+                       is_selfield  TYPE slis_selfield.
+
+  CASE iv_ucomm.
+    WHEN gc_switch_btn.
+      " Botão de alternância pressionado
+      is_selfield-exit = gc_x.
+
+      " Salva configurações atuais do ALV
+      IF gv_switch_flag = 1.
+        PERFORM save_alv_settings USING 'HEADER'.
+      ELSE.
+        PERFORM save_alv_settings USING 'ITEMS'.
+      ENDIF.
+  ENDCASE.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  SAVE_ALV_SETTINGS
+*&---------------------------------------------------------------------*
+*       Salva as configurações atuais do ALV
+*----------------------------------------------------------------------*
+FORM save_alv_settings USING iv_mode TYPE c.
+  DATA:
+    ls_layout   TYPE slis_layout_alv,
+    lt_fieldcat TYPE slis_t_fieldcat_alv,
+    lt_sort     TYPE slis_t_sortinfo_alv,
+    lt_filter   TYPE slis_t_filter_alv,
+    ls_print    TYPE slis_print_alv.
+
+  CALL FUNCTION 'REUSE_ALV_GRID_LAYOUT_INFO_GET'
+    IMPORTING
+      es_layout   = ls_layout
+      et_fieldcat = lt_fieldcat
+      et_sort     = lt_sort
+      et_filter   = lt_filter
+      es_print    = ls_print
+    EXCEPTIONS
+      no_infos    = 1
+      OTHERS      = 2.
+
+  IF sy-subrc = 0.
+    CASE iv_mode.
+      WHEN 'HEADER'.
+        gs_layout_k = ls_layout.
+        gt_fieldcat_k = lt_fieldcat.
+        gt_sort_k = lt_sort.
+        gt_filter_k = lt_filter.
+        gs_print_k = ls_print.
+      WHEN 'ITEMS'.
+        gs_layout_p = ls_layout.
+        gt_fieldcat_p = lt_fieldcat.
+        gt_sort_p = lt_sort.
+        gt_filter_p = lt_filter.
+        gs_print_p = ls_print.
+    ENDCASE.
+  ENDIF.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  PF_STATUS_SET
+*&---------------------------------------------------------------------*
+*       Configura a barra de status do ALV
+*----------------------------------------------------------------------*
+FORM pf_status_set USING it_extab TYPE slis_t_extab.
+  " Remove o botão de alternância da lista de exclusão
+  DELETE it_extab WHERE fcode = gc_switch_btn.
+
+  " Define o status com botão de alternância habilitado
+  SET PF-STATUS 'STANDARD_FULLSCREEN' OF PROGRAM 'SAPLKKBL'
+      EXCLUDING it_extab.
+ENDFORM.
