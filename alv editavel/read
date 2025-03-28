@@ -1,0 +1,41 @@
+Este é um programa ABAP que cria um relatório ALV editável para exibir dados de itens de pedidos de compra (tabela EKPO) no SAP.
+Definições Iniciais:
+
+Declara a tabela EKKO (cabeçalho de pedido de compra)
+
+Define um tipo estruturado t_ekko com campos de itens de pedido
+
+Cria uma tabela interna it_ekko para armazenar os dados
+
+Processo Principal:
+START-OF-SELECTION: Orquestra a execução das principais rotinas
+Funcionalidades Principais
+
+Recuperação de Dados (data_retrieval):
+Seleciona até 10 registros da tabela EKPO (itens de pedido de compra)
+Campos incluídos: número do pedido, item, status, data, material, quantidade, etc.
+
+Configuração do ALV:
+build_fieldcatalog: Define manualmente cada coluna do relatório ALV com propriedades como:
+Nome do campo
+Texto de exibição
+Posição da coluna
+Formatação especial (como ênfase para o campo EBELN)
+Totalização para o campo NETPR (preço líquido)
+
+build_layout: Configura o layout do ALV para:
+Permitir edição (gd_layout-edit = 'X')
+Mostrar seleção de linhas (usando o campo SEL)
+Padrão zebrado (zebra = 'X')
+
+Exibição do Relatório (display_alv_report):
+Chama a função REUSE_ALV_GRID_DISPLAY para mostrar os dados
+Permite salvar configurações do usuário (i_save = 'X')
+
+Interatividade (user_command):
+
+Trata eventos do usuário:
+
+Clicar duas vezes (&IC1) no número do pedido (EBELN): abre a transação ME23N (exibir pedido de compra)
+
+Comando de salvar (&DATA_SAVE): processa linhas selecionadas (atualmente sem implementação completa)
