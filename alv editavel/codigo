@@ -1,0 +1,254 @@
+*&---------------------------------------------------------------------*
+*& Report  Zxxxx
+*&---------------------------------------------------------------------*
+*&
+*& Descrição: Relatório ALV editável para itens de pedidos de compra (EKPO)
+
+REPORT  zxxxxxxx
+
+*----------------------------------------------------------------------*
+* TABELAS
+*----------------------------------------------------------------------*
+TABLES: ekko. "Tabela de cabeçalho de pedido de compra (usada para possíveis checks)
+
+*----------------------------------------------------------------------*
+* TYPE-POOLS
+*----------------------------------------------------------------------*
+TYPE-POOLS: slis. "Declarações para ALV
+
+*----------------------------------------------------------------------*
+* TIPOS DE DADOS
+*----------------------------------------------------------------------*
+* Estrutura para os dados dos itens de pedido
+TYPES: BEGIN OF t_ekko,
+  sel,                         "Campo para seleção de linhas (checkbox)
+  ebeln TYPE ekpo-ebeln,       "Número do pedido de compra
+  ebelp TYPE ekpo-ebelp,       "Item do pedido
+  statu TYPE ekpo-statu,       "Status
+  aedat TYPE ekpo-aedat,       "Data de alteração
+  matnr TYPE ekpo-matnr,       "Material
+  menge TYPE ekpo-menge,       "Quantidade
+  meins TYPE ekpo-meins,       "Unidade de medida
+  netpr TYPE ekpo-netpr,       "Preço líquido
+  peinh TYPE ekpo-peinh,       "Unidade de preço
+END OF t_ekko.
+
+*----------------------------------------------------------------------*
+* VARIÁVEIS GLOBAIS
+*----------------------------------------------------------------------*
+DATA: 
+  "Tabela interna para armazenar os dados
+  it_ekko TYPE STANDARD TABLE OF t_ekko INITIAL SIZE 0,
+  
+  "Work area para processamento
+  wa_ekko TYPE t_ekko.
+
+* Variáveis para configuração do ALV
+DATA: 
+  fieldcatalog TYPE slis_t_fieldcat_alv WITH HEADER LINE, "Catálogo de campos
+  gd_tab_group TYPE slis_t_sp_group_alv,                 "Grupos (não utilizado)
+  gd_layout    TYPE slis_layout_alv,                     "Layout do ALV
+  gd_repid     LIKE sy-repid.                            "Nome do programa
+
+*----------------------------------------------------------------------*
+* INÍCIO DA SELEÇÃO
+*----------------------------------------------------------------------*
+START-OF-SELECTION.
+
+  PERFORM data_retrieval.        "Busca os dados
+  PERFORM build_fieldcatalog.    "Configura as colunas
+  PERFORM build_layout.          "Configura o layout
+  PERFORM display_alv_report.    "Exibe o relatório
+
+*&---------------------------------------------------------------------*
+*&      Form  BUILD_FIELDCATALOG
+*&---------------------------------------------------------------------*
+*       Constrói o catálogo de campos para o relatório ALV
+*----------------------------------------------------------------------*
+* TODO: Considerar usar a função LVC_FIELDCATALOG_MERGE para gerar 
+*       automaticamente a partir da estrutura
+*----------------------------------------------------------------------*
+FORM build_fieldcatalog.
+
+  "Configuração manual de cada coluna do ALV
+
+  "Coluna 0 - Número do pedido de compra
+  fieldcatalog-fieldname   = 'EBELN'.
+  fieldcatalog-seltext_m   = 'Purchase Order'.
+  fieldcatalog-col_pos     = 0.
+  fieldcatalog-outputlen   = 10.
+  fieldcatalog-emphasize   = 'X'.  "Destacado
+  fieldcatalog-key         = 'X'.  "Campo chave
+  APPEND fieldcatalog TO fieldcatalog.
+  CLEAR  fieldcatalog.
+
+  "Coluna 1 - Item do pedido
+  fieldcatalog-fieldname   = 'EBELP'.
+  fieldcatalog-seltext_m   = 'PO Item'.
+  fieldcatalog-col_pos     = 1.
+  APPEND fieldcatalog TO fieldcatalog.
+  CLEAR  fieldcatalog.
+
+  "Coluna 2 - Status
+  fieldcatalog-fieldname   = 'STATU'.
+  fieldcatalog-seltext_m   = 'Status'.
+  fieldcatalog-col_pos     = 2.
+  APPEND fieldcatalog TO fieldcatalog.
+  CLEAR  fieldcatalog.
+
+  "Coluna 3 - Data de alteração
+  fieldcatalog-fieldname   = 'AEDAT'.
+  fieldcatalog-seltext_m   = 'Item change date'.
+  fieldcatalog-col_pos     = 3.
+  APPEND fieldcatalog TO fieldcatalog.
+  CLEAR  fieldcatalog.
+
+  "Coluna 4 - Material
+  fieldcatalog-fieldname   = 'MATNR'.
+  fieldcatalog-seltext_m   = 'Material Number'.
+  fieldcatalog-col_pos     = 4.
+  APPEND fieldcatalog TO fieldcatalog.
+  CLEAR  fieldcatalog.
+
+  "Coluna 5 - Quantidade
+  fieldcatalog-fieldname   = 'MENGE'.
+  fieldcatalog-seltext_m   = 'PO quantity'.
+  fieldcatalog-col_pos     = 5.
+  APPEND fieldcatalog TO fieldcatalog.
+  CLEAR  fieldcatalog.
+
+  "Coluna 6 - Unidade de medida
+  fieldcatalog-fieldname   = 'MEINS'.
+  fieldcatalog-seltext_m   = 'Order Unit'.
+  fieldcatalog-col_pos     = 6.
+  APPEND fieldcatalog TO fieldcatalog.
+  CLEAR  fieldcatalog.
+
+  "Coluna 7 - Preço líquido (com totalização)
+  fieldcatalog-fieldname   = 'NETPR'.
+  fieldcatalog-seltext_m   = 'Net Price'.
+  fieldcatalog-col_pos     = 7.
+  fieldcatalog-outputlen   = 15.
+  fieldcatalog-do_sum      = 'X'.        "Mostra total da coluna
+  fieldcatalog-datatype    = 'CURR'.    "Tipo moeda
+  APPEND fieldcatalog TO fieldcatalog.
+  CLEAR  fieldcatalog.
+
+  "Coluna 8 - Unidade de preço
+  fieldcatalog-fieldname   = 'PEINH'.
+  fieldcatalog-seltext_m   = 'Price Unit'.
+  fieldcatalog-col_pos     = 8.
+  APPEND fieldcatalog TO fieldcatalog.
+  CLEAR  fieldcatalog.
+ENDFORM.                    " BUILD_FIELDCATALOG
+
+*&---------------------------------------------------------------------*
+*&      Form  BUILD_LAYOUT
+*&---------------------------------------------------------------------*
+*       Configura o layout do relatório ALV
+*----------------------------------------------------------------------*
+* TODO: Adicionar mais opções de layout como cores condicionais
+*----------------------------------------------------------------------*
+FORM build_layout.
+  gd_layout-box_fieldname = 'SEL'.  "Campo para seleção de linhas
+  gd_layout-edit          = 'X'.    "Habilita edição
+  gd_layout-zebra         = 'X'.    "Layout zebrado
+  "gd_layout-stylefname   = 'CELLTAB'. "Para futura formatação de células
+ENDFORM.                    " BUILD_LAYOUT
+
+*&---------------------------------------------------------------------*
+*&      Form  DISPLAY_ALV_REPORT
+*&---------------------------------------------------------------------*
+*       Exibe o relatório ALV
+*----------------------------------------------------------------------*
+* TODO: Implementar callback para tratamento de eventos adicionais
+*----------------------------------------------------------------------*
+FORM display_alv_report.
+  gd_repid = sy-repid.
+  
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+    EXPORTING
+      i_callback_program      = gd_repid
+      i_callback_user_command = 'USER_COMMAND'
+      is_layout               = gd_layout
+      it_fieldcat             = fieldcatalog[]
+      i_save                  = 'X'  "Permite salvar configurações
+    TABLES
+      t_outtab                = it_ekko
+    EXCEPTIONS
+      program_error           = 1
+      OTHERS                  = 2.
+      
+  IF sy-subrc <> 0.
+    "TODO: Implementar tratamento de erros adequado
+    MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+            WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+  ENDIF.
+ENDFORM.                    " DISPLAY_ALV_REPORT
+
+*&---------------------------------------------------------------------*
+*&      Form  DATA_RETRIEVAL
+*&---------------------------------------------------------------------*
+*       Busca os dados da tabela EKPO
+*----------------------------------------------------------------------*
+* TODO: Adicionar parâmetros de seleção (SELECT-OPTIONS)
+* TODO: Implementar lógica para buscar todos os itens quando necessário
+*----------------------------------------------------------------------*
+FORM data_retrieval.
+  "Busca apenas 10 registros para exemplo
+  SELECT ebeln ebelp statu aedat matnr menge meins netpr peinh
+    UP TO 10 ROWS
+    FROM ekpo
+    INTO CORRESPONDING FIELDS OF TABLE it_ekko.
+    
+  "Verifica se encontrou dados
+  IF sy-subrc <> 0 OR lines( it_ekko ) = 0.
+    MESSAGE 'Nenhum dado encontrado na tabela EKPO' TYPE 'I'.
+    LEAVE LIST-PROCESSING.
+  ENDIF.
+ENDFORM.                    " DATA_RETRIEVAL
+
+*&---------------------------------------------------------------------*
+*&      Form  USER_COMMAND
+*&---------------------------------------------------------------------*
+*       Trata os comandos do usuário no ALV
+*----------------------------------------------------------------------*
+* TODO: Implementar lógica completa para salvar alterações
+* TODO: Adicionar mais comandos como excluir, duplicar, etc.
+*----------------------------------------------------------------------*
+FORM user_command USING r_ucomm LIKE sy-ucomm
+                  rs_selfield TYPE slis_selfield.
+
+  CASE r_ucomm.
+    WHEN '&IC1'.  "Duplo clique
+      IF rs_selfield-fieldname = 'EBELN'.
+        "Lê a linha clicada
+        READ TABLE it_ekko INTO wa_ekko INDEX rs_selfield-tabindex.
+        IF sy-subrc = 0.
+          "Abre a transação ME23N para visualizar o pedido
+          SET PARAMETER ID 'BES' FIELD wa_ekko-ebeln.
+          CALL TRANSACTION 'ME23N' AND SKIP FIRST SCREEN.
+        ENDIF.
+      ENDIF.
+
+    WHEN '&DATA_SAVE'.  "Salvar
+      "TODO: Implementar lógica para salvar alterações no banco de dados
+      "1. Verificar quais linhas foram modificadas
+      "2. Validar os dados
+      "3. Atualizar a tabela EKPO
+      LOOP AT it_ekko INTO wa_ekko WHERE sel = 'X'.
+        "Processar linhas selecionadas
+        "Exemplo: UPDATE ekpo SET ... WHERE ebeln = wa_ekko-ebeln...
+      ENDLOOP.
+      
+      MESSAGE 'Funcionalidade de salvar ainda não implementada' TYPE 'I'.
+      
+    WHEN OTHERS.
+      "TODO: Tratar outros comandos se necessário
+  ENDCASE.
+  
+  "Atualiza o campo selfield para garantir que o ALV se comporte corretamente
+  rs_selfield-refresh = 'X'.
+  rs_selfield-row_stable = 'X'.
+  rs_selfield-col_stable = 'X'.
+ENDFORM.                    "user_command
