@@ -1,0 +1,452 @@
+*&---------------------------------------------------------------------*
+*& Report  Zxxxx
+*&---------------------------------------------------------------------*
+*&
+*& Descrição: Relatório ALV editável para itens de pedidos de compra (EKPO)
+*& ---------- ---------- ----------------------------------------------
+*& 
+*&    Adicionado parâmetros de seleção, lógica de salvamento
+*&                       e validações
+*&---------------------------------------------------------------------*
+
+REPORT  zxxxxx.
+
+*----------------------------------------------------------------------*
+* TABELAS
+*----------------------------------------------------------------------*
+TABLES: ekko, ekpo.
+
+*----------------------------------------------------------------------*
+* TYPE-POOLS
+*----------------------------------------------------------------------*
+TYPE-POOLS: slis.
+
+*----------------------------------------------------------------------*
+* TIPOS DE DADOS
+*----------------------------------------------------------------------*
+TYPES: BEGIN OF t_ekko,
+  sel         TYPE c,                  "Campo para seleção de linhas
+  ebeln       TYPE ekpo-ebeln,         "Número do pedido
+  ebelp       TYPE ekpo-ebelp,         "Item do pedido
+  statu       TYPE ekpo-statu,         "Status
+  aedat       TYPE ekpo-aedat,         "Data de alteração
+  matnr       TYPE ekpo-matnr,         "Material
+  menge       TYPE ekpo-menge,         "Quantidade
+  meins       TYPE ekpo-meins,         "Unidade de medida
+  netpr       TYPE ekpo-netpr,         "Preço líquido
+  peinh       TYPE ekpo-peinh,         "Unidade de preço
+  modified    TYPE c,                  "Indica se o registro foi modificado
+  celltab     TYPE lvc_t_scol,         "Para formatação de células
+END OF t_ekko.
+
+*----------------------------------------------------------------------*
+* VARIÁVEIS GLOBAIS
+*----------------------------------------------------------------------*
+DATA:
+  it_ekko     TYPE STANDARD TABLE OF t_ekko,
+  wa_ekko     TYPE t_ekko,
+  ok_code     TYPE sy-ucomm,
+  gv_changed  TYPE abap_bool,
+  gv_error    TYPE abap_bool.
+
+* Variáveis para ALV
+DATA:
+  fieldcatalog   TYPE slis_t_fieldcat_alv WITH HEADER LINE,
+  gd_layout      TYPE slis_layout_alv,
+  gd_repid       LIKE sy-repid,
+  gt_events      TYPE slis_t_event,
+  gs_event       TYPE slis_alv_event.
+
+*----------------------------------------------------------------------*
+* PARÂMETROS DE SELEÇÃO
+*----------------------------------------------------------------------*
+SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-t01.
+SELECT-OPTIONS:
+  s_ebeln FOR ekpo-ebeln,    "Número do pedido
+  s_matnr FOR ekpo-matnr,    "Material
+  s_aedat FOR ekpo-aedat.    "Data de alteração
+PARAMETERS:
+  p_max   TYPE i DEFAULT 100 OBLIGATORY. "Número máximo de registros
+SELECTION-SCREEN END OF BLOCK b1.
+
+*----------------------------------------------------------------------*
+* INÍCIO DA SELEÇÃO
+*----------------------------------------------------------------------*
+START-OF-SELECTION.
+ " PERFORM check_authorization.
+  PERFORM data_retrieval.
+  PERFORM build_fieldcatalog.
+  PERFORM build_layout.
+  PERFORM set_events.
+  PERFORM display_alv_report.
+
+*&---------------------------------------------------------------------*
+*&      Form  CHECK_AUTHORIZATION
+*&---------------------------------------------------------------------*
+*       Verifica autorizações do usuário
+**----------------------------------------------------------------------*
+FORM check_authorization.
+  AUTHORITY-CHECK OBJECT 'M_EINKBELE'
+    ID 'ACTVT' FIELD '02'.  "02 = Visualizar
+
+  IF sy-subrc <> 0.
+    MESSAGE e398(00) WITH 'Você não tem autorização para acessar pedidos'.
+  ENDIF.
+
+  "Verifica se tem acesso para editar
+  AUTHORITY-CHECK OBJECT 'M_EINKBELE'
+    ID 'ACTVT' FIELD '03'.  "03 = Modificar
+
+  IF sy-subrc = 0.
+    gd_layout-edit = abap_true. "Ativa modo edição
+  ELSE.
+    gd_layout-edit = abap_false. "Desativa modo edição
+    MESSAGE i398(00) WITH 'Modo edição desativado - Sem autorização para modificar'.
+  ENDIF.
+ENDFORM.
+
+
+*&---------------------------------------------------------------------*
+*&      Form  DATA_RETRIEVAL
+*&---------------------------------------------------------------------*
+*       Busca os dados da tabela EKPO com base nos parâmetros de seleção
+*----------------------------------------------------------------------*
+FORM data_retrieval.
+  SELECT ebeln ebelp statu aedat matnr menge meins netpr peinh
+    FROM ekpo
+    INTO CORRESPONDING FIELDS OF TABLE it_ekko
+    UP TO p_max ROWS
+    WHERE ebeln IN s_ebeln
+      AND matnr IN s_matnr
+      AND aedat IN s_aedat
+    ORDER BY ebeln ebelp.
+
+  IF sy-subrc <> 0 OR lines( it_ekko ) = 0.
+    MESSAGE 'Nenhum dado encontrado com os critérios selecionados' TYPE 'I'.
+    LEAVE LIST-PROCESSING.
+  ENDIF.
+
+  "Inicializa campos de controle
+  LOOP AT it_ekko ASSIGNING FIELD-SYMBOL(<fs_ekko>).
+    <fs_ekko>-modified = abap_false.
+  ENDLOOP.
+ENDFORM.                    " DATA_RETRIEVAL
+
+*&---------------------------------------------------------------------*
+*&      Form  BUILD_FIELDCATALOG
+*&---------------------------------------------------------------------*
+*       Constrói o catálogo de campos para o relatório ALV
+*----------------------------------------------------------------------*
+FORM build_fieldcatalog.
+  DEFINE add_field.
+    fieldcatalog-fieldname   = &1.
+    fieldcatalog-seltext_m   = &2.
+    fieldcatalog-col_pos     = &3.
+    fieldcatalog-outputlen   = &4.
+    fieldcatalog-edit       = &5.
+    fieldcatalog-key        = &6.
+    fieldcatalog-do_sum     = &7.
+    fieldcatalog-datatype   = &8.
+    fieldcatalog-emphasize  = &9.
+    APPEND fieldcatalog TO fieldcatalog.
+    CLEAR  fieldcatalog.
+  END-OF-DEFINITION.
+
+  "Colunas do ALV
+  add_field:
+   'SEL'    'Sel.'        0  4  abap_false abap_false abap_false '' 'X',
+   'EBELN'  'Pedido'      1 10  abap_false abap_true  abap_false '' 'X',
+   'EBELP'  'Item'        2  5  abap_false abap_true  abap_false '' '',
+   'STATU'  'Status'      3  8  abap_false abap_false abap_false '' '',
+   'AEDAT'  'Data Alter.' 4 10  abap_true  abap_false abap_false '' '',
+   'MATNR'  'Material'    5 18  abap_true  abap_false abap_false '' '',
+   'MENGE'  'Quantidade'  6 13  abap_true  abap_false abap_false 'QUAN' '',
+   'MEINS'  'Unidade'     7  5  abap_true  abap_false abap_false '' '',
+   'NETPR'  'Preço'       8 15  abap_true  abap_false abap_true  'CURR' '',
+   'PEINH'  'Unid.Preço'  9  5  abap_true  abap_false abap_false '' ''.
+ENDFORM.                    " BUILD_FIELDCATALOG
+
+*&---------------------------------------------------------------------*
+*&      Form  BUILD_LAYOUT
+*&---------------------------------------------------------------------*
+*       Configura o layout do relatório ALV
+*----------------------------------------------------------------------*
+FORM build_layout.
+  gd_layout-box_fieldname     = 'SEL'.
+  gd_layout-edit              = 'X'.
+  gd_layout-zebra             = 'X'.
+  gd_layout-colwidth_optimize = 'X'.
+  "gd_layout-stylefname        = 'CELLTAB'.
+  gd_layout-get_selinfos      = 'X'.
+  gd_layout-confirmation_prompt = 'X'.
+ENDFORM.                    " BUILD_LAYOUT
+
+*&---------------------------------------------------------------------*
+*&      Form  SET_EVENTS
+*&---------------------------------------------------------------------*
+*       Configura os eventos do ALV
+*----------------------------------------------------------------------*
+FORM set_events.
+  gs_event-name = slis_ev_user_command.
+  gs_event-form = 'USER_COMMAND'.
+  APPEND gs_event TO gt_events.
+
+  gs_event-name = slis_ev_data_changed.
+  gs_event-form = 'DATA_CHANGED'.
+  APPEND gs_event TO gt_events.
+ENDFORM.                    " SET_EVENTS
+
+*&---------------------------------------------------------------------*
+*&      Form  DISPLAY_ALV_REPORT
+*&---------------------------------------------------------------------*
+*       Exibe o relatório ALV
+*----------------------------------------------------------------------*
+FORM display_alv_report.
+  gd_repid = sy-repid.
+
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+    EXPORTING
+      i_callback_program       = gd_repid
+      i_callback_user_command  = 'USER_COMMAND'
+      i_callback_pf_status_set = 'SET_PF_STATUS'
+      is_layout                = gd_layout
+      it_fieldcat              = fieldcatalog[]
+      i_save                   = 'A'
+      it_events                = gt_events
+    TABLES
+      t_outtab                 = it_ekko
+    EXCEPTIONS
+      program_error            = 1
+      OTHERS                   = 2.
+
+  IF sy-subrc <> 0.
+    MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+            WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+  ENDIF.
+ENDFORM.                    " DISPLAY_ALV_REPORT
+
+*&---------------------------------------------------------------------*
+*&      Form  SET_PF_STATUS
+*&---------------------------------------------------------------------*
+*       Configura a barra de status do ALV
+*----------------------------------------------------------------------*
+FORM set_pf_status USING rt_extab TYPE slis_t_extab.
+  SET PF-STATUS 'STANDARD_EDIT' OF PROGRAM 'SAPLKKBL'.
+ENDFORM.                    " SET_PF_STATUS
+
+*&---------------------------------------------------------------------*
+*&      Form  USER_COMMAND
+*&---------------------------------------------------------------------*
+*       Trata os comandos do usuário no ALV
+*----------------------------------------------------------------------*
+FORM user_command USING r_ucomm LIKE sy-ucomm
+                  rs_selfield TYPE slis_selfield.
+
+  CASE r_ucomm.
+    WHEN '&IC1'.  "Duplo clique
+      PERFORM handle_double_click USING rs_selfield.
+
+    WHEN 'SAVE'.  "Salvar alterações
+      PERFORM save_data.
+
+    WHEN 'REFRESH'.  "Atualizar dados
+      PERFORM refresh_data.
+
+    WHEN 'EXPORT'.  "Exportar para Excel
+      PERFORM export_to_excel.
+
+    WHEN OTHERS.
+      "Outros comandos podem ser tratados aqui
+  ENDCASE.
+
+  rs_selfield-refresh = 'X'.
+ENDFORM.                    " USER_COMMAND
+
+*&---------------------------------------------------------------------*
+*&      Form  HANDLE_DOUBLE_CLICK
+*&---------------------------------------------------------------------*
+*       Trata o evento de duplo clique no ALV
+*----------------------------------------------------------------------*
+FORM handle_double_click USING ps_selfield TYPE slis_selfield.
+  CHECK ps_selfield-fieldname = 'EBELN'.
+
+  READ TABLE it_ekko INTO wa_ekko INDEX ps_selfield-tabindex.
+  IF sy-subrc = 0.
+    SET PARAMETER ID 'BES' FIELD wa_ekko-ebeln.
+    CALL TRANSACTION 'ME23N' AND SKIP FIRST SCREEN.
+  ENDIF.
+ENDFORM.                    " HANDLE_DOUBLE_CLICK
+
+*&---------------------------------------------------------------------*
+*&      Form  DATA_CHANGED
+*&---------------------------------------------------------------------*
+*       Trata alterações nos dados do ALV
+*----------------------------------------------------------------------*
+FORM data_changed USING p_event_data TYPE REF TO cl_alv_changed_data_protocol.
+  DATA: lt_mod_cells TYPE lvc_t_modi,
+        ls_mod_cell  TYPE lvc_s_modi.
+
+  "Marca os registros modificados
+  lt_mod_cells = p_event_data->mt_mod_cells.
+
+  LOOP AT lt_mod_cells INTO ls_mod_cell.
+    READ TABLE it_ekko ASSIGNING FIELD-SYMBOL(<fs_line>) INDEX ls_mod_cell-row_id.
+    IF sy-subrc = 0.
+      <fs_line>-modified = abap_true.
+      gv_changed = abap_true.
+
+      "Validações específicas por campo
+      CASE ls_mod_cell-fieldname.
+        WHEN 'MENGE'.
+          IF ls_mod_cell-value <= 0.
+            MESSAGE e398(00) WITH 'Quantidade deve ser maior que zero'.
+            gv_error = abap_true.
+          ENDIF.
+
+        WHEN 'NETPR'.
+          IF ls_mod_cell-value < 0.
+            MESSAGE e398(00) WITH 'Preço não pode ser negativo'.
+            gv_error = abap_true.
+          ENDIF.
+      ENDCASE.
+    ENDIF.
+  ENDLOOP.
+ENDFORM.                    " DATA_CHANGED
+
+*&---------------------------------------------------------------------*
+*&      Form  SAVE_DATA
+*&---------------------------------------------------------------------*
+*       Salva as alterações no banco de dados
+*----------------------------------------------------------------------*
+FORM save_data.
+  DATA: lt_log TYPE TABLE OF string,
+        lv_msg TYPE string.
+
+  IF gv_error = abap_true.
+    MESSAGE 'Corrija os erros antes de salvar' TYPE 'E'.
+    RETURN.
+  ENDIF.
+
+  IF gv_changed = abap_false.
+    MESSAGE 'Nenhuma alteração para salvar' TYPE 'I'.
+    RETURN.
+  ENDIF.
+
+  "Processa apenas os registros modificados
+  LOOP AT it_ekko ASSIGNING FIELD-SYMBOL(<fs_ekko>) WHERE modified = abap_true.
+    "Atualiza a tabela EKPO
+    UPDATE ekpo SET
+      aedat = <fs_ekko>-aedat
+      matnr = <fs_ekko>-matnr
+      menge = <fs_ekko>-menge
+      meins = <fs_ekko>-meins
+      netpr = <fs_ekko>-netpr
+      peinh = <fs_ekko>-peinh
+    WHERE ebeln = <fs_ekko>-ebeln
+      AND ebelp = <fs_ekko>-ebelp.
+
+    IF sy-subrc = 0.
+      COMMIT WORK.
+      <fs_ekko>-modified = abap_false.
+      lv_msg = |Pedido { <fs_ekko>-ebeln }-{ <fs_ekko>-ebelp } atualizado com sucesso|.
+      APPEND lv_msg TO lt_log.
+    ELSE.
+      ROLLBACK WORK.
+      lv_msg = |Erro ao atualizar pedido { <fs_ekko>-ebeln }-{ <fs_ekko>-ebelp }|.
+      APPEND lv_msg TO lt_log.
+    ENDIF.
+  ENDLOOP.
+
+  "Exibe log de atualizações
+  IF lines( lt_log ) > 0.
+    cl_demo_output=>display( lt_log ).
+  ENDIF.
+
+  gv_changed = abap_false.
+  MESSAGE 'Alterações salvas com sucesso' TYPE 'S'.
+ENDFORM.                    " SAVE_DATA
+
+*&---------------------------------------------------------------------*
+*&      Form  REFRESH_DATA
+*&---------------------------------------------------------------------*
+*       Atualiza os dados do ALV
+*----------------------------------------------------------------------*
+FORM refresh_data.
+  IF gv_changed = abap_true.
+    DATA: lv_answer TYPE c.
+    CALL FUNCTION 'POPUP_TO_CONFIRM'
+      EXPORTING
+        text_question  = 'Existem alterações não salvas. Deseja continuar?'
+      IMPORTING
+        answer         = lv_answer.
+
+    IF lv_answer <> '1'.
+      RETURN.
+    ENDIF.
+  ENDIF.
+
+  PERFORM data_retrieval.
+  PERFORM display_alv_report.
+  MESSAGE 'Dados atualizados' TYPE 'S'.
+ENDFORM.                    " REFRESH_DATA
+
+*&---------------------------------------------------------------------*
+*&      Form  EXPORT_TO_EXCEL
+*&---------------------------------------------------------------------*
+*       Exporta dados para Excel
+*----------------------------------------------------------------------*
+FORM export_to_excel.
+  DATA: lt_rawdata TYPE truxs_t_text_data.
+
+  CALL FUNCTION 'SAP_CONVERT_TO_TEX_FORMAT'
+    EXPORTING
+      i_field_seperator    = ';'
+    TABLES
+      i_tab_sap_data      = it_ekko
+    CHANGING
+      i_tab_converted_data = lt_rawdata
+    EXCEPTIONS
+      conversion_failed    = 1
+      OTHERS               = 2.
+
+  IF sy-subrc = 0.
+    CALL FUNCTION 'GUI_DOWNLOAD'
+      EXPORTING
+        filename                = 'ITENS_PEDIDO.csv'
+        filetype                = 'ASC'
+        write_field_separator   = 'X'
+      TABLES
+        data_tab                = lt_rawdata
+      EXCEPTIONS
+        file_write_error        = 1
+        no_batch                = 2
+        gui_refuse_filetransfer = 3
+        invalid_type            = 4
+        no_authority            = 5
+        unknown_error           = 6
+        header_not_allowed      = 7
+        separator_not_allowed   = 8
+        filesize_not_allowed    = 9
+        header_too_long         = 10
+        dp_error_create         = 11
+        dp_error_send           = 12
+        dp_error_write          = 13
+        unknown_dp_error        = 14
+        access_denied           = 15
+        dp_out_of_memory        = 16
+        disk_full               = 17
+        dp_timeout              = 18
+        file_not_found          = 19
+        dataprovider_exception  = 20
+        control_flush_error     = 21
+        OTHERS                  = 22.
+
+    IF sy-subrc = 0.
+      MESSAGE 'Dados exportados com sucesso' TYPE 'S'.
+    ELSE.
+      MESSAGE 'Erro ao exportar dados' TYPE 'E'.
+    ENDIF.
+  ELSE.
+    MESSAGE 'Erro na conversão dos dados' TYPE 'E'.
+  ENDIF.
+ENDFORM.                    " EXPORT_TO_EXCEL
